@@ -27,6 +27,7 @@ spec:
                 values:
                   - home-assistant
                   - paperless
+                  - vaultwarden
       ports:
         - port: 5432
 ---
