@@ -23,3 +23,29 @@ data:
                   "$f"
             done
       lockRepo: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmp-envsubst-apps
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: envsubst-apps
+    spec:
+      allowConcurrency: true
+      generate:
+        command:
+          - sh
+          - -c
+          - |
+            find . -maxdepth 2 -name "application.yaml" | sort | while read -r f; do
+              echo "---"
+              sed -e "s|\${DOMAIN}|${DOMAIN}|g" \
+                  -e "s|\${EMAIL}|${EMAIL}|g" \
+                  "$f"
+            done
+      lockRepo: false
