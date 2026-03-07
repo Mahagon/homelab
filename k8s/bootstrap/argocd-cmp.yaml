@@ -16,9 +16,10 @@ data:
           - sh
           - -c
           - |
-            VARS='${DOMAIN} ${EMAIL}'
             find . -name "*.yaml" | sort | while read -r f; do
               echo "---"
-              envsubst "$VARS" < "$f"
+              sed -e "s|\${DOMAIN}|${DOMAIN}|g" \
+                  -e "s|\${EMAIL}|${EMAIL}|g" \
+                  "$f"
             done
       lockRepo: false
