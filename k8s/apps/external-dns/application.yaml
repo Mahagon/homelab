@@ -12,23 +12,15 @@ spec:
     helm:
       values: |
         provider:
-          name: godaddy
+          name: cloudflare
         domainFilters:
           - ${DOMAIN}
-        extraArgs:
-          - --godaddy-api-key=$(GODADDY_API_KEY)
-          - --godaddy-api-secret=$(GODADDY_API_SECRET)
         env:
-          - name: GODADDY_API_KEY
+          - name: CF_API_TOKEN
             valueFrom:
               secretKeyRef:
-                name: godaddy-api-credentials
-                key: api-key
-          - name: GODADDY_API_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: godaddy-api-credentials
-                key: api-secret
+                name: cloudflare-api-token
+                key: api-token
         resources:
           requests:
             cpu: 25m

@@ -14,18 +14,10 @@ spec:
       name: letsencrypt-staging-account-key
     solvers:
       - dns01:
-          webhook:
-            groupName: acme.webhook.godaddy
-            solverName: godaddy
-            config:
-              apiKeySecretRef:
-                name: godaddy-api-credentials
-                key: api-key
-              apiSecretSecretRef:
-                name: godaddy-api-credentials
-                key: api-secret
-              production: true
-              ttl: 600
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -41,15 +33,7 @@ spec:
       name: letsencrypt-prod-account-key
     solvers:
       - dns01:
-          webhook:
-            groupName: acme.webhook.godaddy
-            solverName: godaddy
-            config:
-              apiKeySecretRef:
-                name: godaddy-api-credentials
-                key: api-key
-              apiSecretSecretRef:
-                name: godaddy-api-credentials
-                key: api-secret
-              production: true
-              ttl: 600
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
