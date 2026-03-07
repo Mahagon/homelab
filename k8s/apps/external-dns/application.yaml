@@ -17,9 +17,6 @@ spec:
         extraArgs:
           - --godaddy-api-key=$(GODADDY_API_KEY)
           - --godaddy-api-secret=$(GODADDY_API_SECRET)
-          - --txt-prefix=extdns.
-          - --txt-owner-id=homelab
-          - --source=ingress
         env:
           - name: GODADDY_API_KEY
             valueFrom:
@@ -38,6 +35,9 @@ spec:
           limits:
             memory: 96Mi
         policy: sync
+        sources:
+          - ingress
+        txtPrefix: "homelab-%{record_type}."
         txtOwnerId: homelab
   destination:
     server: https://kubernetes.default.svc
