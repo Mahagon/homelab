@@ -92,9 +92,7 @@ storage:
           tls-san:
             - "homelab"
             - "homelab.local"
-          # Disable servicelb in favor of a simpler setup
-          disable:
-            - servicelb
+          # servicelb (klipper) assigns the node IP to LoadBalancer services (e.g. Traefik)
           # Use the SSD for K3s data
           data-dir: /var/lib/rancher/k3s
           # Default local-path storage on HDD
