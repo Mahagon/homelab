@@ -1,0 +1,55 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  annotations:
+    # Deploy after cert-manager CRDs and webhook are ready
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  acme:
+    # Use staging first to avoid rate limits while testing
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: ${EMAIL}
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - dns01:
+          webhook:
+            groupName: acme.webhook.godaddy
+            solverName: godaddy
+            config:
+              apiKeySecretRef:
+                name: godaddy-api-credentials
+                key: api-key
+              apiSecretSecretRef:
+                name: godaddy-api-credentials
+                key: api-secret
+              production: true
+              ttl: 600
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: ${EMAIL}
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - dns01:
+          webhook:
+            groupName: acme.webhook.godaddy
+            solverName: godaddy
+            config:
+              apiKeySecretRef:
+                name: godaddy-api-credentials
+                key: api-key
+              apiSecretSecretRef:
+                name: godaddy-api-credentials
+                key: api-secret
+              production: true
+              ttl: 600
