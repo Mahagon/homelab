@@ -21,12 +21,10 @@ spec:
         tls:
           enabled: true
 
-    # Allow Traefik to read TLS secrets from all namespaces
-    additionalArguments:
-      - "--providers.kubernetesIngress.allowCrossNamespaceSslCertificates=true"
-
     # Pick up Ingress resources from all namespaces
+    # allowCrossNamespaceSecrets lets Traefik read TLS secrets from any namespace
     providers:
       kubernetesIngress:
         publishedService:
           enabled: true
+        allowCrossNamespaceSecrets: true
