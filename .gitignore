@@ -1,0 +1,15 @@
+# Secrets - NEVER commit these
+k8s/secrets/*.yaml
+!k8s/secrets/*.example
+
+# Ignition (generated from butane)
+butane/*.ign
+
+# Python
+tests/__pycache__/
+tests/.pytest_cache/
+.venv/
+
+# OS
+.DS_Store
+*.swp
