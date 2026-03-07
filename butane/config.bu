@@ -1,0 +1,185 @@
+variant: fcos
+version: 1.7.0
+
+# ============================================================
+# Fedora CoreOS - GA-J1900N-D3V Homelab
+# Transpile: butane --pretty --strict < config.bu > config.ign
+# ============================================================
+
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
+        - "ssh-ed25519 ... example-key ..."
+
+# --- Disk & Filesystem Setup --------------------------------
+# Assumes:
+#   /dev/sda = 512GB SSD (FCOS installed here by coreos-installer)
+#               └─ /var/lib/homelab  fast PVs (PostgreSQL, Redis, config volumes)
+#   /dev/sdb = 4TB HDD   (data storage)
+#               └─ /var/mnt/data     bulk PVs (media, documents)
+#   /dev/sdc = 4TB USB   (backup drive)
+
+storage:
+  filesystems:
+    - path: /var/mnt/data
+      device: /dev/sdb1
+      format: ext4
+      wipe_filesystem: false
+      with_mount_unit: true
+    - path: /var/mnt/backup
+      device: /dev/sdc1
+      format: ext4
+      wipe_filesystem: false
+      with_mount_unit: true
+
+  files:
+    # --- Network bonding (enp1s0 + enp2s0 → bond0, active-backup) ------
+    - path: /etc/NetworkManager/system-connections/bond0.nmconnection
+      mode: 0600
+      contents:
+        inline: |
+          [connection]
+          id=bond0
+          type=bond
+          interface-name=bond0
+
+          [bond]
+          mode=active-backup
+          miimon=100
+
+          [ipv4]
+          method=auto
+
+          [ipv6]
+          method=auto
+          addr-gen-mode=eui64
+
+    - path: /etc/NetworkManager/system-connections/enp1s0-bond.nmconnection
+      mode: 0600
+      contents:
+        inline: |
+          [connection]
+          id=enp1s0-bond
+          type=ethernet
+          interface-name=enp1s0
+          master=bond0
+          slave-type=bond
+
+          [ethernet]
+
+    - path: /etc/NetworkManager/system-connections/enp2s0-bond.nmconnection
+      mode: 0600
+      contents:
+        inline: |
+          [connection]
+          id=enp2s0-bond
+          type=ethernet
+          interface-name=enp2s0
+          master=bond0
+          slave-type=bond
+
+          [ethernet]
+
+    # K3s install configuration
+    - path: /etc/rancher/k3s/config.yaml
+      mode: 0644
+      contents:
+        inline: |
+          # K3s server configuration
+          write-kubeconfig-mode: "0644"
+          tls-san:
+            - "homelab"
+            - "homelab.local"
+          # Disable servicelb in favor of a simpler setup
+          disable:
+            - servicelb
+          # Use the SSD for K3s data
+          data-dir: /var/lib/rancher/k3s
+          # Default local-path storage on HDD
+          default-local-storage-path: /var/mnt/data
+
+    # K3s install script (runs once via systemd)
+    - path: /usr/local/bin/install-k3s.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/bin/bash
+          set -euo pipefail
+
+          # Wait for network
+          until curl -sf https://get.k3s.io > /dev/null 2>&1; do
+            echo "Waiting for network..."
+            sleep 5
+          done
+
+          # Install K3s
+          curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -
+
+          # Mark installation complete
+          touch /etc/rancher/k3s/.installed
+
+    # Automatic system updates configuration
+    - path: /etc/zincati/config.d/55-updates.toml
+      mode: 0644
+      contents:
+        inline: |
+          [updates]
+          strategy = "periodic"
+          [[updates.periodic.window]]
+          days = [ "Sun" ]
+          start_time = "03:00"
+          length_minutes = 120
+
+    # Sysctl tuning for Kubernetes
+    - path: /etc/sysctl.d/99-kubernetes.conf
+      mode: 0644
+      contents:
+        inline: |
+          net.bridge.bridge-nf-call-iptables = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward = 1
+          fs.inotify.max_user_watches = 524288
+          fs.inotify.max_user_instances = 512
+
+systemd:
+  units:
+    # One-shot: install K3s on first boot
+    - name: install-k3s.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Install K3s
+        After=network-online.target var-mnt-data.mount
+        Wants=network-online.target
+        # Only run if K3s is not yet installed
+        ConditionPathExists=!/etc/rancher/k3s/.installed
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/install-k3s.sh
+        RemainAfterExit=true
+        StandardOutput=journal
+        StandardError=journal
+
+        [Install]
+        WantedBy=multi-user.target
+
+    # Backup USB drive - optional, don't block boot if unplugged
+    - name: var-mnt-backup.mount
+      dropins:
+        - name: 10-nofail.conf
+          contents: |
+            [Unit]
+            After=dev-sdc1.device
+            [Mount]
+            Options=nofail,x-systemd.device-timeout=5s
+
+    # Ensure the HDD is mounted before K3s starts
+    - name: k3s.service
+      dropins:
+        - name: 10-wait-for-data.conf
+          contents: |
+            [Unit]
+            After=var-mnt-data.mount
+            Requires=var-mnt-data.mount
