@@ -19,7 +19,7 @@ spec:
               memory: 64Mi
             limits:
               memory: 128Mi
-    # ClusterIssuers and godaddy-webhook config (sync-wave 1, after CRDs are ready)
+    # ClusterIssuers (sync-wave 1, after CRDs are ready)
     - repoURL: git@github.com:Mahagon/homelab.git
       targetRevision: main
       path: k8s/apps/cert-manager/manifests

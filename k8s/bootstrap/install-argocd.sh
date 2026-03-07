@@ -62,23 +62,21 @@ helm upgrade --install argocd argo/argo-cd \
   --set-file "configs.repositories.homelab.sshPrivateKey=$SSH_KEY_FILE" \
   --wait
 
-echo "==> Creating GoDaddy API secret for external-dns and cert-manager..."
+echo "==> Creating Cloudflare API token secret for external-dns and cert-manager..."
 echo ""
-echo "Please provide your GoDaddy credentials:"
-read -rp "  GoDaddy API Key: " GODADDY_KEY
-read -rsp "  GoDaddy API Secret: " GODADDY_SECRET
+echo "Please provide your Cloudflare API token"
+echo "(needs Zone:DNS:Edit + Zone:Zone:Read permissions):"
+read -rsp "  Cloudflare API Token: " CF_TOKEN
 echo ""
 
-kubectl create secret generic godaddy-api-credentials \
+kubectl create secret generic cloudflare-api-token \
   --namespace external-dns \
-  --from-literal=api-key="$GODADDY_KEY" \
-  --from-literal=api-secret="$GODADDY_SECRET" \
+  --from-literal=api-token="$CF_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl create secret generic godaddy-api-credentials \
+kubectl create secret generic cloudflare-api-token \
   --namespace cert-manager \
-  --from-literal=api-key="$GODADDY_KEY" \
-  --from-literal=api-secret="$GODADDY_SECRET" \
+  --from-literal=api-token="$CF_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Retrieving ArgoCD initial admin password..."
