@@ -1,0 +1,32 @@
+# Customize the K3s-managed Traefik instance.
+# K3s watches HelmChartConfig resources in kube-system and merges
+# these values into its own Traefik Helm release automatically.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    # Expose both HTTP (80) and HTTPS (443)
+    ports:
+      web:
+        port: 8000
+        exposedPort: 80
+        redirectTo:
+          port: websecure
+      websecure:
+        port: 8443
+        exposedPort: 443
+        tls:
+          enabled: true
+
+    # Allow Traefik to read TLS secrets from all namespaces
+    additionalArguments:
+      - "--providers.kubernetesIngress.allowCrossNamespaceSslCertificates=true"
+
+    # Pick up Ingress resources from all namespaces
+    providers:
+      kubernetesIngress:
+        publishedService:
+          enabled: true
