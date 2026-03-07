@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns
+    chart: external-dns
+    targetRevision: 1.20.0
+    helm:
+      values: |
+        provider:
+          name: godaddy
+        # domainFilters omitted — external-dns discovers domains from Ingress resources
+        extraArgs:
+          - --godaddy-api-key=$(GODADDY_API_KEY)
+          - --godaddy-api-secret=$(GODADDY_API_SECRET)
+          - --txt-prefix=extdns.
+          - --txt-owner-id=homelab
+          - --source=ingress
+        env:
+          - name: GODADDY_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: godaddy-api-credentials
+                key: api-key
+          - name: GODADDY_API_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: godaddy-api-credentials
+                key: api-secret
+        resources:
+          requests:
+            cpu: 25m
+            memory: 48Mi
+          limits:
+            memory: 96Mi
+        policy: sync
+        txtOwnerId: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
