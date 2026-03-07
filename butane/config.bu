@@ -1,5 +1,5 @@
 variant: fcos
-version: 1.7.0
+version: 1.4.0
 
 # ============================================================
 # Fedora CoreOS - GA-J1900N-D3V Homelab
@@ -10,7 +10,8 @@ passwd:
   users:
     - name: core
       ssh_authorized_keys:
-        - "ssh-ed25519 ... example-key ..."
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDclcWuZXqqxrDVB80Xsy06Z77cYaTSMYA/+Gw0aYRRl 874007+Mahagon@users.noreply.github.com"
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILXB9x2S01kZd75YEGIZlAo2I8Y/nXcpy6If44xQFjsr wrk"
 
 # --- Disk & Filesystem Setup --------------------------------
 # Assumes:
