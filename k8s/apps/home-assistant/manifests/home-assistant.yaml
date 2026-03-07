@@ -104,7 +104,7 @@ metadata:
   name: home-assistant
   namespace: home-assistant
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: homeassistent.${DOMAIN}
+    external-dns.alpha.kubernetes.io/hostname: homeassistant.${DOMAIN}
 spec:
   selector:
     app: home-assistant
@@ -126,10 +126,10 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - homeassistent.${DOMAIN}
+        - homeassistant.${DOMAIN}
       secretName: home-assistant-tls
   rules:
-    - host: homeassistent.${DOMAIN}
+    - host: homeassistant.${DOMAIN}
       http:
         paths:
           - path: /
