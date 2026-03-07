@@ -1,0 +1,44 @@
+# ArgoCD Helm values — configures the git repository and envsubst CMP sidecar.
+# DOMAIN and EMAIL are injected at sync time from the homelab-config Secret;
+# they are never stored in git.
+# The SSH private key is passed via --set-file at install time; not in git.
+
+configs:
+  repositories:
+    homelab:
+      type: git
+      # url and sshPrivateKey are passed via --set/--set-file during helm install
+repoServer:
+  volumes:
+    - name: cmp-envsubst-config
+      configMap:
+        name: argocd-cmp-envsubst
+  extraContainers:
+    - name: cmp-envsubst
+      # Use the ArgoCD image — it ships envsubst. Pin this to match your ArgoCD version.
+      image: quay.io/argoproj/argocd:latest
+      command: [/var/run/argocd/argocd-cmp-server]
+      env:
+        - name: DOMAIN
+          valueFrom:
+            secretKeyRef:
+              name: homelab-config
+              key: domain
+        - name: EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: homelab-config
+              key: email
+      volumeMounts:
+        - mountPath: /var/run/argocd
+          name: var-files
+        - mountPath: /home/argocd/cmp-server/plugins
+          name: plugins
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+          subPath: plugin.yaml
+          name: cmp-envsubst-config
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999

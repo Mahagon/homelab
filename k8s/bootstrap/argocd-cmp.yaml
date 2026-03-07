@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmp-envsubst
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: envsubst
+    spec:
+      allowConcurrency: true
+      generate:
+        command:
+          - sh
+          - -c
+          - |
+            VARS='${DOMAIN} ${EMAIL}'
+            find . -name "*.yaml" | sort | while read -r f; do
+              echo "---"
+              envsubst "$VARS" < "$f"
+            done
+      lockRepo: false
