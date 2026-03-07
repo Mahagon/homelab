@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.jetstack.io
+      chart: cert-manager
+      targetRevision: v1.19.4
+      helm:
+        values: |
+          crds:
+            enabled: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+    # ClusterIssuers and godaddy-webhook config (sync-wave 1, after CRDs are ready)
+    - repoURL: git@github.com:Mahagon/homelab.git
+      targetRevision: main
+      path: k8s/apps/cert-manager/manifests
+      plugin:
+        name: envsubst
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
