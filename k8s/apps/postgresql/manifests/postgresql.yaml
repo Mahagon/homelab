@@ -9,8 +9,10 @@ data:
   create-databases.sql: |
     CREATE DATABASE paperless;
     CREATE DATABASE homeassistant;
+    CREATE DATABASE vaultwarden;
     GRANT ALL PRIVILEGES ON DATABASE paperless TO homelab;
     GRANT ALL PRIVILEGES ON DATABASE homeassistant TO homelab;
+    GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO homelab;
 ---
 apiVersion: v1
 kind: ConfigMap
