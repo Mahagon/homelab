@@ -20,6 +20,9 @@ repoServer:
     - name: cmp-envsubst-config
       configMap:
         name: argocd-cmp-envsubst
+    - name: cmp-envsubst-apps-config
+      configMap:
+        name: argocd-cmp-envsubst-apps
   extraContainers:
     - name: cmp-envsubst
       # Use the ArgoCD image — it ships envsubst. Pin this to match your ArgoCD version.
@@ -46,6 +49,33 @@ repoServer:
         - mountPath: /home/argocd/cmp-server/config/plugin.yaml
           subPath: plugin.yaml
           name: cmp-envsubst-config
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+    - name: cmp-envsubst-apps
+      image: quay.io/argoproj/argocd:latest
+      command: [/var/run/argocd/argocd-cmp-server]
+      env:
+        - name: DOMAIN
+          valueFrom:
+            secretKeyRef:
+              name: homelab-config
+              key: domain
+        - name: EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: homelab-config
+              key: email
+      volumeMounts:
+        - mountPath: /var/run/argocd
+          name: var-files
+        - mountPath: /home/argocd/cmp-server/plugins
+          name: plugins
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+          subPath: plugin.yaml
+          name: cmp-envsubst-apps-config
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
