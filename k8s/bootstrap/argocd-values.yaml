@@ -8,6 +8,13 @@ configs:
     homelab:
       type: git
       # url and sshPrivateKey are passed via --set/--set-file during helm install
+server:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    # hostname is passed via --set global.domain during helm install
 repoServer:
   volumes:
     - name: cmp-envsubst-config

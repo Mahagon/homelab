@@ -9,7 +9,7 @@ set -euo pipefail
 #   REPO_URL      - git repo URL, e.g. git@github.com:You/homelab.git
 #   DOMAIN        - your domain, e.g. example.com
 #   EMAIL         - ACME/Let's Encrypt email, e.g. you@example.com
-#   SSH_KEY_FILE  - path to SSH private key for repo access (default: ~/.ssh/id_ed25519)
+#   SSH_KEY_FILE  - path to SSH private key for repo access (default: ~/.ssh/id_ed25519_argocd)
 #
 # DOMAIN and EMAIL are stored in a cluster Secret and injected
 # into manifests at ArgoCD sync time via the envsubst CMP —
@@ -31,7 +31,7 @@ if [[ -z "${EMAIL:-}" ]]; then
   read -rp "ACME email (e.g. you@example.com): " EMAIL
 fi
 
-SSH_KEY_FILE="${SSH_KEY_FILE:-${HOME}/.ssh/id_ed25519}"
+SSH_KEY_FILE="${SSH_KEY_FILE:-${HOME}/.ssh/id_ed25519_argocd}"
 
 # ---- Bootstrap ----
 
@@ -57,14 +57,9 @@ helm repo update
 helm upgrade --install argocd argo/argo-cd \
   --namespace argocd \
   --values "$SCRIPT_DIR/argocd-values.yaml" \
+  --set "global.domain=argocd.${DOMAIN}" \
   --set "configs.repositories.homelab.url=$REPO_URL" \
   --set-file "configs.repositories.homelab.sshPrivateKey=$SSH_KEY_FILE" \
-  --set server.ingress.enabled=true \
-  --set server.ingress.ingressClassName=traefik \
-  --set "server.ingress.hosts[0]=argocd.${DOMAIN}" \
-  --set 'server.ingress.tls[0].secretName=argocd-tls' \
-  --set "server.ingress.tls[0].hosts[0]=argocd.${DOMAIN}" \
-  --set server.ingress.annotations."cert-manager\.io/cluster-issuer"=letsencrypt-prod \
   --wait
 
 echo "==> Creating GoDaddy API secret for external-dns and cert-manager..."
