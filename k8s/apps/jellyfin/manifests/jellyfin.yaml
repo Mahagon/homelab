@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-config
+  namespace: jellyfin
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-ssd
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Media PVC - large sequential data stays on HDD
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-media
+  namespace: jellyfin
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-hdd
+  resources:
+    requests:
+      storage: 500Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  labels:
+    app: jellyfin
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      containers:
+        - name: jellyfin
+          image: jellyfin/jellyfin:latest
+          ports:
+            - containerPort: 8096
+              name: http
+          env:
+            - name: TZ
+              value: "Europe/Berlin"
+            - name: JELLYFIN_PublishedServerUrl
+              value: "https://jellyfin.${DOMAIN}"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media
+              mountPath: /media
+            # Intel Quick Sync (J1900) for hardware transcoding
+            - name: render-device
+              mountPath: /dev/dri
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            # Needed for /dev/dri access - render group GID
+            # Run `stat -c '%g' /dev/dri/renderD128` on the host to confirm
+            supplementalGroups: [44, 109]
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: media
+          persistentVolumeClaim:
+            claimName: jellyfin-media
+        - name: render-device
+          hostPath:
+            path: /dev/dri
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: jellyfin.${DOMAIN}
+spec:
+  selector:
+    app: jellyfin
+  ports:
+    - port: 8096
+      targetPort: 8096
+      name: http
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - jellyfin.${DOMAIN}
+      secretName: jellyfin-tls
+  rules:
+    - host: jellyfin.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jellyfin
+                port:
+                  number: 8096
