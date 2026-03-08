@@ -13,9 +13,13 @@
   "automerge": false,
   "automergeType": "pr",
   "argocd": {
-    "fileMatch": ["k8s/apps/.+/application\\.yaml$"]
+    "managerFilePatterns": [
+      "/k8s/apps/.+/application\\.yaml$/"
+    ]
   },
   "kubernetes": {
-    "fileMatch": ["k8s/apps/.+/manifests/.+\\.yaml$"]
+    "managerFilePatterns": [
+      "/k8s/apps/.+/manifests/.+\\.yaml$/"
+    ]
   }
 }
