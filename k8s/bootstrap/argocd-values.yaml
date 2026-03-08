@@ -30,6 +30,7 @@ server:
     ingressClassName: traefik
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
+      traefik.ingress.kubernetes.io/service.serverstransport: argocd-skip-verify@kubernetescrd
     tls: true
 repoServer:
   volumes:
