@@ -10,7 +10,6 @@ spec:
     requests:
       storage: 5Gi
 ---
-# Media PVC - large sequential data stays on HDD
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -58,7 +57,6 @@ spec:
               mountPath: /config
             - name: media
               mountPath: /media
-            # Intel Quick Sync (J1900) for hardware transcoding
             - name: render-device
               mountPath: /dev/dri
           resources:
@@ -68,9 +66,7 @@ spec:
             limits:
               memory: 1Gi
           securityContext:
-            # Needed for /dev/dri access - render group GID
-            # Run `stat -c '%g' /dev/dri/renderD128` on the host to confirm
-            supplementalGroups: [44, 109]
+            supplementalGroups: [105]
           livenessProbe:
             httpGet:
               path: /health
