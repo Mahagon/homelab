@@ -8,3 +8,11 @@ spec:
     args:
       - --kubelet-insecure-tls
       - --kubelet-preferred-address-types=InternalIP
+    priorityClassName: system-node-critical
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
