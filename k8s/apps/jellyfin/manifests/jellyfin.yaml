@@ -42,7 +42,7 @@ spec:
         app: jellyfin
     spec:
       securityContext:
-        supplementalGroups: [105]
+        supplementalGroups: [39, 105]  # 39=video (card1), 105=render (renderD128)
       containers:
         - name: jellyfin
           image: jellyfin/jellyfin:latest
