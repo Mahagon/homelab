@@ -53,9 +53,11 @@ echo "==> Installing ArgoCD via Helm..."
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
 
+ARGOCD_VALUES=$(sed "s|\${DOMAIN}|${DOMAIN}|g" "$SCRIPT_DIR/argocd-values.yaml")
+
 helm upgrade --install argocd argo/argo-cd \
   --namespace argocd \
-  --values "$SCRIPT_DIR/argocd-values.yaml" \
+  --values <(echo "$ARGOCD_VALUES") \
   --set "global.domain=argocd.${DOMAIN}" \
   --set "configs.repositories.homelab.url=$REPO_URL" \
   --set-file "configs.repositories.homelab.sshPrivateKey=$SSH_KEY_FILE" \
@@ -76,6 +78,37 @@ kubectl create secret generic cloudflare-api-token \
 kubectl create secret generic cloudflare-api-token \
   --namespace cert-manager \
   --from-literal=api-token="$CF_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "==> Configuring GitHub OAuth for ArgoCD..."
+echo ""
+echo "Create a GitHub OAuth App at https://github.com/settings/developers"
+echo "  Homepage URL:  https://argocd.${DOMAIN}"
+echo "  Callback URL:  https://argocd.${DOMAIN}/api/dex/callback"
+echo ""
+read -rp "  GitHub OAuth Client ID: " ARGOCD_GH_CLIENT_ID
+read -rsp "  GitHub OAuth Client Secret: " ARGOCD_GH_CLIENT_SECRET
+echo ""
+
+kubectl patch secret argocd-secret \
+  --namespace argocd \
+  --type merge \
+  -p "{\"stringData\":{\"dex.github.clientID\":\"${ARGOCD_GH_CLIENT_ID}\",\"dex.github.clientSecret\":\"${ARGOCD_GH_CLIENT_SECRET}\"}}"
+
+echo "==> Configuring GitHub OAuth for Paperless-ngx..."
+echo ""
+echo "Create a GitHub OAuth App at https://github.com/settings/developers"
+echo "  Homepage URL:  https://paperless.${DOMAIN}"
+echo "  Callback URL:  https://paperless.${DOMAIN}/accounts/github/login/callback/"
+echo ""
+read -rp "  GitHub OAuth Client ID: " PAPERLESS_GH_CLIENT_ID
+read -rsp "  GitHub OAuth Client Secret: " PAPERLESS_GH_CLIENT_SECRET
+echo ""
+
+kubectl create namespace paperless --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic paperless-github-oauth \
+  --namespace paperless \
+  --from-literal=providers-json="{\"github\": {\"APP\": {\"client_id\": \"${PAPERLESS_GH_CLIENT_ID}\", \"secret\": \"${PAPERLESS_GH_CLIENT_SECRET}\", \"key\": \"\"}}}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Retrieving ArgoCD initial admin password..."
