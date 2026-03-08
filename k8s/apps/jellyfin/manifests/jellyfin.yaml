@@ -41,6 +41,8 @@ spec:
       labels:
         app: jellyfin
     spec:
+      securityContext:
+        supplementalGroups: [105]
       containers:
         - name: jellyfin
           image: jellyfin/jellyfin:latest
@@ -65,8 +67,6 @@ spec:
               memory: 512Mi
             limits:
               memory: 1Gi
-          securityContext:
-            supplementalGroups: [105]
           livenessProbe:
             httpGet:
               path: /health
