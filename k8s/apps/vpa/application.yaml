@@ -14,6 +14,7 @@ spec:
     helm:
       values: |
         admissionController:
+          revisionHistoryLimit: 0
           resources:
             requests:
               cpu: 50m
@@ -23,6 +24,7 @@ spec:
           extraArgs:
             feature-gates: InPlaceOrRecreate=true
         recommender:
+          revisionHistoryLimit: 0
           resources:
             requests:
               cpu: 50m
@@ -30,6 +32,7 @@ spec:
             limits:
               memory: 128Mi
         updater:
+          revisionHistoryLimit: 0
           resources:
             requests:
               cpu: 50m
