@@ -4,6 +4,8 @@
 # The SSH private key is passed via --set-file at install time; not in git.
 
 configs:
+  params:
+    server.insecure: "true"
   repositories:
     homelab:
       type: git
