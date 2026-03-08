@@ -28,3 +28,7 @@ spec:
         publishedService:
           enabled: true
         allowCrossNamespaceSecrets: true
+    # Skip TLS verification for backend connections — backends like ArgoCD serve
+    # self-signed certs on their pod IPs which have no IP SANs
+    serversTransport:
+      insecureSkipVerify: true
