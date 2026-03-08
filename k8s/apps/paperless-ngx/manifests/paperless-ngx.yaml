@@ -106,6 +106,17 @@ spec:
                 secretKeyRef:
                   name: paperless-secrets
                   key: PAPERLESS_ADMIN_PASSWORD
+            - name: PAPERLESS_APPS
+              value: "allauth.socialaccount.providers.github"
+            - name: PAPERLESS_SOCIALACCOUNT_PROVIDERS
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-github-oauth
+                  key: providers-json
+            - name: PAPERLESS_ACCOUNT_EMAIL_VERIFICATION
+              value: "none"
+            - name: PAPERLESS_SOCIALACCOUNT_ALLOW_SIGNUPS
+              value: "false"
           volumeMounts:
             - name: data
               mountPath: /usr/src/paperless/data
