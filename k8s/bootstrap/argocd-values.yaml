@@ -14,13 +14,16 @@ configs:
             clientID: $dex.github.clientID
             clientSecret: $dex.github.clientSecret
             redirectURI: https://argocd.${DOMAIN}/api/dex/callback
+            scopes:
+              - email
+              - profile
+              - preferred_username
   rbac:
     policy.csv: |
       g, Mahagon, role:admin
   repositories:
     homelab:
       type: git
-      # url and sshPrivateKey are passed via --set/--set-file during helm install
 server:
   ingress:
     enabled: true
@@ -28,7 +31,6 @@ server:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls: true
-    # hostname is passed via --set global.domain during helm install
 repoServer:
   volumes:
     - name: cmp-envsubst-config
@@ -39,7 +41,6 @@ repoServer:
         name: argocd-cmp-envsubst-apps
   extraContainers:
     - name: cmp-envsubst
-      # Use the ArgoCD image — it ships envsubst. Pin this to match your ArgoCD version.
       image: quay.io/argoproj/argocd:latest
       command: [/var/run/argocd/argocd-cmp-server]
       env:
