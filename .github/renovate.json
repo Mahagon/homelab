@@ -11,5 +11,11 @@
   ],
   "prCreation": "immediate",
   "automerge": false,
-  "automergeType": "pr"
+  "automergeType": "pr",
+  "argocd": {
+    "fileMatch": ["k8s/apps/.+/application\\.yaml$"]
+  },
+  "kubernetes": {
+    "fileMatch": ["k8s/apps/.+/manifests/.+\\.yaml$"]
+  }
 }
