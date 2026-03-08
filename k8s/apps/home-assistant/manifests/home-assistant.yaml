@@ -49,6 +49,11 @@ spec:
 
               recorder:
                 db_url: !env_var RECORDER_DB_URL
+
+              http:
+                use_x_forwarded_for: true
+                trusted_proxies:
+                  - 10.42.0.0/16
               EOF
               fi
           env:
