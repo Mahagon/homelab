@@ -85,6 +85,11 @@ spec:
       containers:
         - name: home-assistant
           image: ghcr.io/home-assistant/home-assistant:stable
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
           ports:
             - containerPort: 8123
               name: http
