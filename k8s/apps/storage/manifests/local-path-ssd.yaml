@@ -1,6 +1,50 @@
 # StorageClass backed by the SSD (/var/lib/homelab) for latency-sensitive workloads.
-# Use local-path-ssd for: PostgreSQL, Redis, Jellyfin config, Forgejo, Home Assistant config, Paperless data
+# Use local-path-ssd for: PostgreSQL, Redis, Jellyfin config, Home Assistant config, Vaultwarden
 # Use local-path-hdd for: Jellyfin media, Paperless media/consume
+#
+# The K3s bundled local-path-provisioner ignores the StorageClass `configmap` parameter,
+# so we deploy a separate provisioner instance with its own name and configmap.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: local-path-provisioner-ssd
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: local-path-provisioner-ssd
+rules:
+  - apiGroups: [""]
+    resources: [nodes, persistentvolumeclaims, configmaps, pods, pods/log]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [persistentvolumes]
+    verbs: [get, list, watch, create, patch, update, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: local-path-provisioner-ssd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: local-path-provisioner-ssd
+subjects:
+  - kind: ServiceAccount
+    name: local-path-provisioner-ssd
+    namespace: kube-system
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -40,13 +84,57 @@ data:
           image: busybox
           imagePullPolicy: IfNotPresent
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-path-provisioner-ssd
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-path-provisioner-ssd
+  template:
+    metadata:
+      labels:
+        app: local-path-provisioner-ssd
+    spec:
+      serviceAccountName: local-path-provisioner-ssd
+      containers:
+        - name: local-path-provisioner
+          image: rancher/local-path-provisioner:v0.0.31
+          imagePullPolicy: IfNotPresent
+          command:
+            - local-path-provisioner
+            - start
+            - --config=/etc/config/config.json
+            - --service-account-name=local-path-provisioner-ssd
+            - --provisioner-name=homelab/local-path-ssd
+            - --configmap-name=local-path-config-ssd
+          volumeMounts:
+            - name: config
+              mountPath: /etc/config
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: config
+          configMap:
+            name: local-path-config-ssd
+---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: local-path-ssd
-provisioner: rancher.io/local-path
-parameters:
-  configmap: local-path-config-ssd
+provisioner: homelab/local-path-ssd
 reclaimPolicy: Retain
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
