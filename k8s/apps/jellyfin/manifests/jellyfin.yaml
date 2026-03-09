@@ -20,7 +20,7 @@ spec:
   storageClassName: local-path-hdd
   resources:
     requests:
-      storage: 500Gi
+      storage: 2000Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -42,7 +42,7 @@ spec:
         app: jellyfin
     spec:
       securityContext:
-        supplementalGroups: [39, 105]  # 39=video (card1), 105=render (renderD128)
+        supplementalGroups: [39, 105] # 39=video (card1), 105=render (renderD128)
       containers:
         - name: jellyfin
           image: jellyfin/jellyfin:latest
