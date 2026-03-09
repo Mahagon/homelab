@@ -16,7 +16,7 @@ metadata:
   name: homelab-backup
   namespace: backup
 spec:
-  # Daily at 01:00 - before Zincati update window (Sun 03:00–05:00)
+  # Daily at 01:00 - before Zincati update window (Sun 03:00-05:00)
   schedule: "0 1 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
@@ -66,18 +66,18 @@ spec:
                     restic init
                   fi
 
-                  echo "==> Backing up SSD PVCs..."
-                  restic backup /data/ssd --tag pvc-ssd
+                  echo "==> Backing up SSD PVCs (config/data volumes)..."
+                  restic backup /data/ssd --tag pvcs-ssd
+
+                  echo "==> Backing up HDD PVCs (media volumes)..."
+                  restic backup /data/hdd --tag pvcs-hdd
 
                   echo "==> Backing up PostgreSQL dump..."
                   restic backup /pgdump --tag postgresql
 
-                  echo "==> Backing up HDD media..."
-                  restic backup /data/hdd --tag media
-
                   echo "==> Pruning old snapshots..."
                   restic forget \
-                    --tag pvc-ssd --tag postgresql --tag media \
+                    --tag pvcs-ssd --tag pvcs-hdd --tag postgresql \
                     --keep-daily 7 \
                     --keep-weekly 4 \
                     --keep-monthly 6 \
