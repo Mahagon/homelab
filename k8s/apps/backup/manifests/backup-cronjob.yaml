@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: homelab-backup
+  namespace: backup
+spec:
+  schedule: "0 1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:18-alpine
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+
+                  DATE=$(date +%Y-%m-%d)
+                  DEST=/backup/$DATE
+                  mkdir -p "$DEST/postgresql" "$DEST/pvc-ssd"
+
+                  echo "==> Dumping PostgreSQL databases..."
+                  PGPASSWORD="$PG_PASSWORD" pg_dumpall \
+                    -h postgresql.postgresql.svc.cluster.local \
+                    -U homelab \
+                    > "$DEST/postgresql/dump.sql"
+                  echo "    Done: $(du -sh "$DEST/postgresql/dump.sql" | cut -f1)"
+
+                  echo "==> Backing up SSD PVC data..."
+                  cp -a /data/ssd/. "$DEST/pvc-ssd/"
+                  echo "    Done: $(du -sh "$DEST/pvc-ssd" | cut -f1)"
+
+                  echo "==> Rotating old backups (keeping 7 days)..."
+                  find /backup -maxdepth 1 -type d -name "????-??-??" | \
+                    sort | head -n -7 | xargs -r rm -rf
+
+                  echo "==> Backup complete: $DEST"
+                  echo "    Total backup size: $(du -sh /backup | cut -f1)"
+              env:
+                - name: PG_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgresql-credentials
+                      key: password
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                - name: pvc-ssd
+                  mountPath: /data/ssd
+                  readOnly: true
+          volumes:
+            - name: backup
+              hostPath:
+                path: /var/mnt/backup
+                type: Directory
+            - name: pvc-ssd
+              hostPath:
+                path: /var/lib/homelab
+                type: Directory
