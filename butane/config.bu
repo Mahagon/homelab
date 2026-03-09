@@ -15,7 +15,7 @@ passwd:
 
 # --- Disk & Filesystem Setup --------------------------------
 # Assumes:
-#   /dev/sda = 512GB SSD (FCOS installed here by coreos-installer)
+#   /dev/sda = 256GB SSD (FCOS installed here by coreos-installer)
 #               └─ /var/lib/homelab  fast PVs (PostgreSQL, Redis, config volumes)
 #   /dev/sdb = 4TB HDD   (data storage)
 #               └─ /var/mnt/data     bulk PVs (media, documents)
