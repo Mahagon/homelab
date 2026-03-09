@@ -35,6 +35,16 @@ storage:
       with_mount_unit: true
 
   files:
+    # --- Automount backup USB drive on hot-plug ---
+    - path: /etc/udev/rules.d/99-backup-usb.rules
+      mode: 0644
+      contents:
+        inline: |
+          # Start the systemd mount unit when /dev/sdc1 is connected
+          ACTION=="add", KERNEL=="sdc1", TAG+="systemd", ENV{SYSTEMD_WANTS}="var-mnt-backup.mount"
+          # Stop (unmount) when disconnected
+          ACTION=="remove", KERNEL=="sdc1", RUN+="/usr/bin/systemctl stop var-mnt-backup.mount"
+
     # --- Network bonding (enp1s0 + enp2s0 → bond0, active-backup) ------
     - path: /etc/NetworkManager/system-connections/bond0.nmconnection
       mode: 0600
