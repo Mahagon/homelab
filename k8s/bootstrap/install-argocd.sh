@@ -12,7 +12,7 @@ set -euo pipefail
 #   SSH_KEY_FILE  - path to SSH private key for repo access (default: ~/.ssh/id_ed25519_argocd)
 #
 # DOMAIN and EMAIL are stored in a cluster Secret and injected
-# into manifests at ArgoCD sync time via the envsubst CMP —
+# into manifests at ArgoCD sync time via the envsubst CMP -
 # they are never written to git.
 # ============================================================
 

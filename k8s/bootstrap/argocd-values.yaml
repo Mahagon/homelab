@@ -1,4 +1,4 @@
-# ArgoCD Helm values — configures the git repository and envsubst CMP sidecar.
+# ArgoCD Helm values - configures the git repository and envsubst CMP sidecar.
 # DOMAIN and EMAIL are injected at sync time from the homelab-config Secret;
 # they are never stored in git.
 # The SSH private key is passed via --set-file at install time; not in git.
