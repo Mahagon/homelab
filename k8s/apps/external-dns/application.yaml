@@ -31,6 +31,11 @@ spec:
         sources:
           - ingress
           - traefik-proxy
+        rbac:
+          additionalPermissions:
+            - apiGroups: ["traefik.io"]
+              resources: ["ingressroutes", "ingressroutetcps", "ingressrouteudps"]
+              verbs: ["get", "list", "watch"]
         txtPrefix: "homelab-%{record_type}."
         txtOwnerId: homelab
   destination:
