@@ -14,10 +14,6 @@ configs:
             clientID: $dex.github.clientID
             clientSecret: $dex.github.clientSecret
             redirectURI: https://argocd.${DOMAIN}/api/dex/callback
-            scopes:
-              - email
-              - profile
-              - preferred_username
   rbac:
     policy.csv: |
       g, Mahagon, role:admin
