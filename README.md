@@ -206,16 +206,16 @@ flowchart LR
     end
 
     subgraph src["Source data (read-only hostPath)"]
-        SSD["/var/lib/homelab\nSSD fast PVs"]
-        HDD["/var/mnt/data\nHDD media & documents"]
+        SSD["/var/lib/homelab\nSSD PVCs — PostgreSQL, Redis,\nconfig volumes"]
+        HDD["/var/mnt/data\nHDD PVCs — Jellyfin media,\nPaperless media/consume"]
     end
 
     subgraph dst["Destination"]
         USB["/var/mnt/backup/restic-repo\nUSB 4TB"]
     end
 
-    SSD -->|tag: pvc-ssd| R
-    HDD -->|tag: media| R
+    SSD -->|tag: pvcs-ssd| R
+    HDD -->|tag: pvcs-hdd| R
     R -->|tag: postgresql| USB
     R --> USB
 ```
