@@ -16,7 +16,7 @@ configs:
             redirectURI: https://argocd.${DOMAIN}/api/dex/callback
   rbac:
     policy.csv: |
-      g, Mahagon, role:admin
+      g, ${EMAIL}, role:admin
   repositories:
     homelab:
       type: git
