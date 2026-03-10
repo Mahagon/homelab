@@ -27,6 +27,7 @@ spec:
             memory: 48Mi
           limits:
             memory: 96Mi
+        logLevel: debug
         policy: sync
         sources:
           - ingress
