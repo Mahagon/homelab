@@ -25,13 +25,10 @@ configs:
     homelab:
       type: git
 server:
+  extraArgs:
+    - --insecure
   ingress:
-    enabled: true
-    ingressClassName: traefik
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-      traefik.ingress.kubernetes.io/service.serverstransport: argocd-skip-verify@kubernetescrd
-    tls: true
+    enabled: false
 repoServer:
   volumes:
     - name: cmp-envsubst-config
