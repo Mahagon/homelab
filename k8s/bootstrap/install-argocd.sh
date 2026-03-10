@@ -53,7 +53,7 @@ echo "==> Installing ArgoCD via Helm..."
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
 
-ARGOCD_VALUES=$(sed "s|\${DOMAIN}|${DOMAIN}|g" "$SCRIPT_DIR/argocd-values.yaml")
+ARGOCD_VALUES=$(sed "s|\${DOMAIN}|${DOMAIN}|g; s|\${EMAIL}|${EMAIL}|g" "$SCRIPT_DIR/argocd-values.yaml")
 
 helm upgrade --install argocd argo/argo-cd \
   --namespace argocd \
