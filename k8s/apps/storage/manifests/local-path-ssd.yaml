@@ -110,7 +110,6 @@ spec:
             - --config=/etc/config/config.json
             - --provisioner-name=homelab/local-path-ssd
             - --configmap-name=local-path-config-ssd
-            - --configmap-namespace=kube-system
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
