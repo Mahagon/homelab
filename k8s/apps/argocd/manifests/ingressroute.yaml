@@ -5,24 +5,17 @@ metadata:
   namespace: argocd
   annotations:
     external-dns.alpha.kubernetes.io/hostname: argocd.${DOMAIN}
-    traefik.ingress.kubernetes.io/service.serverstransport: argocd-skip-verify@kubernetescrd
-    traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
   entryPoints:
     - websecure
   routes:
     - kind: Rule
       match: Host(`argocd.${DOMAIN}`)
-      priority: 10
+      middlewares:
+        - name: redirect-https
+          namespace: kube-system
       services:
         - name: argocd-server
-          port: 443
-    - kind: Rule
-      match: Host(`argocd.${DOMAIN}`) && Header(`Content-Type`, `application/grpc`)
-      priority: 11
-      services:
-        - name: argocd-server
-          port: 443
-          scheme: h2c
+          port: 80
   tls:
     secretName: argocd-server-tls
