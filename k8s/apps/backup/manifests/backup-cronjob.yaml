@@ -25,7 +25,7 @@ spec:
     spec:
       template:
         spec:
-          restartPolicy: OnFailure
+          restartPolicy: Never
           initContainers:
             # Dump PostgreSQL before restic backup
             - name: pg-dump
