@@ -28,6 +28,7 @@ spec:
                   - home-assistant
                   - paperless
                   - vaultwarden
+                  - backup
       ports:
         - port: 5432
 ---
