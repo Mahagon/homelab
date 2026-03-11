@@ -21,9 +21,9 @@ configs:
   repositories:
     homelab:
       type: git
-  # configs:
-  #   params:
-  #     server.insecure: true
+  configs:
+    params:
+      server.insecure: true
 notifications:
   enabled: false
 server:
