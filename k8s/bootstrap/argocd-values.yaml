@@ -14,24 +14,26 @@ configs:
             clientID: $dex.github.clientID
             clientSecret: $dex.github.clientSecret
             redirectURI: https://argocd.${DOMAIN}/api/dex/callback
-            scopes:
-              - email
-              - profile
-              - preferred_username
   rbac:
     policy.csv: |
-      g, Mahagon, role:admin
+      p, role:editor, applications, sync, */*, allow
+      g, ${EMAIL}, role:editor
   repositories:
     homelab:
       type: git
+  configs:
+    params:
+      server.insecure: true
+notifications:
+  enabled: false
 server:
   ingress:
+    enabled: false
+  certificate:
     enabled: true
-    ingressClassName: traefik
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-      traefik.ingress.kubernetes.io/service.serverstransport: argocd-skip-verify@kubernetescrd
-    tls: true
+    issuer:
+      kind: ClusterIssuer
+      name: letsencrypt-prod
 repoServer:
   volumes:
     - name: cmp-envsubst-config
