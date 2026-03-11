@@ -4,7 +4,7 @@ metadata:
   name: ingress-route-argocd-server
   namespace: argocd
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: argocd.${DOMAIN}
+    external-dns.alpha.kubernetes.io/target: argocd.${DOMAIN}
 spec:
   entryPoints:
     - websecure
