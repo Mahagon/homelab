@@ -6,6 +6,7 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: argocd.${DOMAIN}
     traefik.ingress.kubernetes.io/service.serverstransport: argocd-skip-verify@kubernetescrd
+    traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
   entryPoints:
     - websecure
