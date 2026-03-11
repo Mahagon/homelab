@@ -1,7 +1,7 @@
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
-  name: argocd-server
+  name: ingress-route-argocd-server
   namespace: argocd
   annotations:
     external-dns.alpha.kubernetes.io/hostname: argocd.${DOMAIN}
