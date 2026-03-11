@@ -16,8 +16,8 @@ metadata:
   name: homelab-backup
   namespace: backup
 spec:
-  # Daily at 01:00 - before Zincati update window (Sun 03:00-05:00)
-  schedule: "0 1 * * *"
+  # Mon-Sat at 01:00 - skip Sunday to avoid conflicts with Zincati update window (Sun 03:00-05:00)
+  schedule: "0 1 * * 1-6"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
