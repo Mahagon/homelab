@@ -11,6 +11,8 @@ configs:
           id: github
           name: GitHub
           config:
+            clientID: $dex.github.clientID
+            clientSecret: $dex.github.clientSecret
             redirectURI: https://argocd.${DOMAIN}/api/dex/callback
   rbac:
     policy.csv: |
