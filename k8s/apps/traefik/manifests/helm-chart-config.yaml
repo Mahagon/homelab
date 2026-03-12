@@ -8,7 +8,6 @@ metadata:
   namespace: kube-system
 spec:
   valuesContent: |-
-    # Expose both HTTP (80) and HTTPS (443)
     ports:
       web:
         port: 8000
@@ -20,9 +19,9 @@ spec:
         exposedPort: 443
         tls:
           enabled: true
-
-    # Pick up Ingress resources from all namespaces
-    # allowCrossNamespaceSecrets lets Traefik read TLS secrets from any namespace
+    service:
+      annotations:
+        external-dns.alpha.kubernetes.io/hostname: traefik.danieljacobs.de
     providers:
       kubernetesIngress:
         publishedService:
