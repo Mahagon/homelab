@@ -16,8 +16,8 @@ configs:
             redirectURI: https://argocd.${DOMAIN}/api/dex/callback
   rbac:
     policy.csv: |
-      p, role:editor, applications, sync, */*, allow
-      g, ${EMAIL}, role:editor
+      g, ${EMAIL}, role:admin
+    scopes: "[groups, email]"
   repositories:
     homelab:
       type: git
