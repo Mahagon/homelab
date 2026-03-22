@@ -189,6 +189,30 @@ storage:
           start_time = "03:00"
           length_minutes = 120
 
+    # --- Fan control (IT8620E on GA-J1900N-D3V) ---
+    - path: /etc/modules-load.d/it87.conf
+      mode: 0644
+      contents:
+        inline: it87
+
+    - path: /usr/local/bin/fan-control.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/bin/bash
+          set -euo pipefail
+          # Find the it87 hwmon device dynamically
+          for hwmon in /sys/class/hwmon/hwmon*; do
+            if [[ "$(cat "$hwmon/name" 2>/dev/null)" == "it8620" ]]; then
+              echo 1 > "$hwmon/pwm1_enable"
+              echo 92 > "$hwmon/pwm1"
+              echo "fan-control: set $hwmon/pwm1=92 (manual mode)"
+              exit 0
+            fi
+          done
+          echo "fan-control: it8620 hwmon device not found" >&2
+          exit 1
+
     # Sysctl tuning for Kubernetes
     - path: /etc/sysctl.d/99-kubernetes.conf
       mode: 0644
@@ -261,6 +285,22 @@ systemd:
 
         [Install]
         WantedBy=timers.target
+
+    # Fan control - set PWM after it87 module is loaded
+    - name: fan-control.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Set CPU fan PWM speed
+        After=systemd-modules-load.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/fan-control.sh
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target
 
     # Ensure the HDD is mounted before K3s starts
     - name: k3s.service
