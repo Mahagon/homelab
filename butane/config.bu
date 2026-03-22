@@ -35,6 +35,12 @@ storage:
       with_mount_unit: true
 
   files:
+    # --- Static hostname (prevents dynamic IPv6-based hostname from DHCP) ---
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: homelab
+
     # --- Automount backup USB drive on hot-plug ---
     - path: /etc/udev/rules.d/99-backup-usb.rules
       mode: 0644
