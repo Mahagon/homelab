@@ -5,21 +5,24 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    repoURL: https://prometheus-community.github.io/helm-charts
-    chart: kube-state-metrics
-    targetRevision: 7.2.2
-    helm:
-      values: |
-        podAnnotations:
-          prometheus.io/scrape: "true"
-          prometheus.io/port: "8080"
-        resources:
-          requests:
-            cpu: 10m
-            memory: 64Mi
-          limits:
-            memory: 128Mi
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-state-metrics
+      targetRevision: 7.2.2
+      helm:
+        values: |
+          podAnnotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8080"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+    - repoURL: git@github.com:Mahagon/homelab.git
+      targetRevision: main
+      path: k8s/apps/kube-state-metrics/manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
