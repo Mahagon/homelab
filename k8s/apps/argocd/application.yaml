@@ -31,9 +31,18 @@ spec:
               scopes: "[groups, email]"
             params:
               server.insecure: true
-          notifications:
-            enabled: false
+          controller:
+            metrics:
+              enabled: true
+            podAnnotations:
+              prometheus.io/scrape: "true"
+              prometheus.io/port: "8082"
           server:
+            metrics:
+              enabled: true
+            podAnnotations:
+              prometheus.io/scrape: "true"
+              prometheus.io/port: "8083"
             ingress:
               enabled: false
             certificate:
@@ -41,7 +50,14 @@ spec:
               issuer:
                 kind: ClusterIssuer
                 name: letsencrypt-prod
+          notifications:
+            enabled: false
           repoServer:
+            metrics:
+              enabled: true
+            podAnnotations:
+              prometheus.io/scrape: "true"
+              prometheus.io/port: "8084"
             volumes:
               - name: cmp-envsubst-config
                 configMap:
