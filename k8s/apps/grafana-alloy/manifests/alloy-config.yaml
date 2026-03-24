@@ -84,6 +84,38 @@ data:
       forward_to = [prometheus.relabel.drop_high_cardinality.receiver]
     }
 
+    // --- ArgoCD metrics services (job labels match the standard dashboard) ---
+    discovery.kubernetes "services" {
+      role = "service"
+      namespaces {
+        names = ["argocd"]
+      }
+    }
+
+    discovery.relabel "argocd_metrics" {
+      targets = discovery.kubernetes.services.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        regex         = "argocd-(application-controller|server|repo-server|applicationset-controller)-metrics"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        target_label  = "job"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+    }
+
+    prometheus.scrape "argocd" {
+      targets         = discovery.relabel.argocd_metrics.output
+      scrape_interval = "30s"
+      forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+    }
+
     // --- Scrape pods with prometheus.io annotations ---
     discovery.relabel "pod_annotations" {
       targets = discovery.kubernetes.pods.targets
