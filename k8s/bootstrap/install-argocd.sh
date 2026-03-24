@@ -81,9 +81,19 @@ helm upgrade --install argocd argo/argo-cd \
   --namespace argocd \
   --values <(echo "$ARGOCD_VALUES") \
   --set "global.domain=argocd.${DOMAIN}" \
-  --set "configs.repositories.homelab.url=$REPO_URL" \
-  --set-file "configs.repositories.homelab.sshPrivateKey=$SSH_KEY_FILE" \
   --wait
+
+echo "==> Creating repo credential secret (managed outside Helm)..."
+kubectl create secret generic argocd-repo-homelab \
+  --namespace argocd \
+  --from-literal=type=git \
+  --from-literal=url="$REPO_URL" \
+  --from-file=sshPrivateKey="$SSH_KEY_FILE" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl label secret argocd-repo-homelab \
+  --namespace argocd \
+  argocd.argoproj.io/secret-type=repository \
+  --overwrite
 
 _cf_external_dns_exists=false
 _cf_cert_manager_exists=false

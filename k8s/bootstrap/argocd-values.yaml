@@ -1,7 +1,7 @@
-# ArgoCD Helm values - configures the git repository and envsubst CMP sidecar.
-# DOMAIN and EMAIL are injected at sync time from the homelab-config Secret;
-# they are never stored in git.
-# The SSH private key is passed via --set-file at install time; not in git.
+# ArgoCD Helm values for initial bootstrap install only.
+# After bootstrap, ArgoCD manages itself via k8s/apps/argocd/application.yaml.
+# DOMAIN and EMAIL are injected via sed at install time.
+# Repo credentials are created as a standalone labeled Secret.
 
 configs:
   cm:
@@ -18,9 +18,6 @@ configs:
     policy.csv: |
       g, ${EMAIL}, role:admin
     scopes: "[groups, email]"
-  repositories:
-    homelab:
-      type: git
   params:
     server.insecure: true
 notifications:
