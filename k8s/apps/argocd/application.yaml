@@ -11,8 +11,11 @@ spec:
       targetRevision: 9.4.15
       helm:
         values: |
+          global:
+            domain: argocd.${DOMAIN}
           configs:
             cm:
+              url: https://argocd.${DOMAIN}
               dex.config: |
                 connectors:
                   - type: github
