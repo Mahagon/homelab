@@ -5,35 +5,38 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    repoURL: https://kubernetes-sigs.github.io/external-dns
-    chart: external-dns
-    targetRevision: 1.20.0
-    helm:
-      values: |
-        provider:
-          name: cloudflare
-        domainFilters:
-          - ${DOMAIN}
-        env:
-          - name: CF_API_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: cloudflare-api-token
-                key: api-token
-        resources:
-          requests:
-            cpu: 25m
-            memory: 48Mi
-          limits:
-            memory: 96Mi
-        policy: sync
-        sources:
-          - ingress
-          - service
-          - traefik-proxy
-        txtPrefix: "homelab-%{record_type}."
-        txtOwnerId: homelab
+  sources:
+    - repoURL: https://kubernetes-sigs.github.io/external-dns
+      chart: external-dns
+      targetRevision: 1.20.0
+      helm:
+        values: |
+          provider:
+            name: cloudflare
+          domainFilters:
+            - ${DOMAIN}
+          env:
+            - name: CF_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-api-token
+                  key: api-token
+          resources:
+            requests:
+              cpu: 25m
+              memory: 48Mi
+            limits:
+              memory: 96Mi
+          policy: sync
+          sources:
+            - ingress
+            - service
+            - traefik-proxy
+          txtPrefix: "homelab-%{record_type}."
+          txtOwnerId: homelab
+    - repoURL: git@github.com:Mahagon/homelab.git
+      targetRevision: main
+      path: k8s/apps/external-dns/manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: external-dns
