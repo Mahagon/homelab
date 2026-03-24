@@ -171,6 +171,31 @@ else
     --dry-run=client -o yaml | kubectl apply -f -
 fi
 
+kubectl create namespace grafana-alloy --dry-run=client -o yaml | kubectl apply -f -
+
+if kubectl get secret grafana-cloud-credentials --namespace grafana-alloy &>/dev/null 2>&1; then
+  echo "==> grafana-cloud-credentials secret already exists, skipping."
+else
+  echo "==> Configuring Grafana Cloud credentials..."
+  echo ""
+  echo "Find these at https://grafana.com → your stack → Details"
+  echo ""
+  read -rp "  Grafana Cloud API token (glc_...): " GC_API_KEY
+  read -rp "  Prometheus remote write URL: " GC_METRICS_URL
+  read -rp "  Prometheus username (instance ID): " GC_METRICS_USERNAME
+  read -rp "  Loki push URL: " GC_LOGS_URL
+  read -rp "  Loki username (instance ID): " GC_LOGS_USERNAME
+
+  kubectl create secret generic grafana-cloud-credentials \
+    --namespace grafana-alloy \
+    --from-literal=API_KEY="$GC_API_KEY" \
+    --from-literal=METRICS_URL="$GC_METRICS_URL" \
+    --from-literal=METRICS_USERNAME="$GC_METRICS_USERNAME" \
+    --from-literal=LOGS_URL="$GC_LOGS_URL" \
+    --from-literal=LOGS_USERNAME="$GC_LOGS_USERNAME" \
+    --dry-run=client -o yaml | kubectl apply -f -
+fi
+
 echo "==> Retrieving ArgoCD initial admin password..."
 echo "    Password: $(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
 echo ""

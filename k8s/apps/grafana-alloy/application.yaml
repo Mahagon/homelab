@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana-alloy
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.6.2
+      helm:
+        values: |
+          alloy:
+            configMap:
+              create: false
+              name: alloy-config
+              key: config.alloy
+            mounts:
+              varlog: true
+            clustering:
+              enabled: false
+          controller:
+            type: daemonset
+          serviceAccount:
+            create: true
+          crds:
+            create: false
+    - repoURL: git@github.com:Mahagon/homelab.git
+      targetRevision: main
+      path: k8s/apps/grafana-alloy/manifests
+      plugin:
+        name: envsubst
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: grafana-alloy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
