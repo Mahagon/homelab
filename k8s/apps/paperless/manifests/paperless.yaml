@@ -88,6 +88,8 @@ spec:
               value: "deu+eng"
             - name: PAPERLESS_OCR_SKIP_ARCHIVE_FILE
               value: "with_text"
+            - name: PAPERLESS_FILENAME_FORMAT
+              value: "{{ created_year }}/{{ correspondent }}/{{ title }}"
             - name: PAPERLESS_TIME_ZONE
               value: "Europe/Berlin"
             - name: PAPERLESS_DATA_DIR
