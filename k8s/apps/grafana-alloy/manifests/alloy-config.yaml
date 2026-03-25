@@ -196,7 +196,7 @@ data:
     prometheus.relabel "drop_high_cardinality" {
       rule {
         source_labels = ["__name__"]
-        regex         = "(.+_bucket|etcd_.+|apiserver_request_duration.+|apiserver_response_sizes.+)"
+        regex         = "(.+_bucket|etcd_.+|apiserver_request_duration.+|apiserver_response_sizes.+|grpc_server_.+)"
         action        = "drop"
       }
       forward_to = [prometheus.remote_write.grafana_cloud.receiver]
