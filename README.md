@@ -1,6 +1,6 @@
 # Homelab - Fedora CoreOS + K3s + ArgoCD
 
-Declarative home lab running on a GA-J1900N-D3V (4GB RAM, 256GB SSD, 4TB HDD).
+Declarative home lab running on a GA-J1900N-D3V (8GB RAM, 256GB SSD, 4TB HDD).
 
 ## Architecture
 
@@ -11,7 +11,7 @@ graph TD
     ExternalDNS -->|A records| Cloudflare["Cloudflare DNS"]
     CertManager -->|DNS-01 challenge| Cloudflare
 
-    subgraph hw["GA-J1900N-D3V - 4GB RAM"]
+    subgraph hw["GA-J1900N-D3V - 8GB RAM"]
         subgraph fcos["Fedora CoreOS"]
             subgraph cluster["K3s"]
                 ArgoCD
