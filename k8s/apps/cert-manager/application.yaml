@@ -13,6 +13,11 @@ spec:
         values: |
           crds:
             enabled: true
+          prometheus:
+            enabled: true
+          podAnnotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "9402"
           resources:
             requests:
               cpu: 50m
