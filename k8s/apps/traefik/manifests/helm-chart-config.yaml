@@ -8,7 +8,18 @@ metadata:
   namespace: kube-system
 spec:
   valuesContent: |-
+    deployment:
+      podAnnotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    metrics:
+      prometheus:
+        entryPoint: metrics
     ports:
+      metrics:
+        port: 9100
+        expose:
+          default: false
       web:
         port: 8000
         exposedPort: 80
