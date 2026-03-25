@@ -1,0 +1,176 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: paperless-data
+  namespace: paperless
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-ssd
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: paperless-media
+  namespace: paperless
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-hdd
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paperless
+  namespace: paperless
+  labels:
+    app: paperless
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: paperless
+  template:
+    metadata:
+      labels:
+        app: paperless
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: paperless
+          image: ghcr.io/paperless-ngx/paperless-ngx:2.16
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: PAPERLESS_DBENGINE
+              value: "postgresql"
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: PAPERLESS_DBHOST
+              value: "postgresql.postgresql.svc.cluster.local"
+            - name: PAPERLESS_DBPORT
+              value: "5432"
+            - name: PAPERLESS_DBNAME
+              value: "paperless"
+            - name: PAPERLESS_DBUSER
+              value: "homelab"
+            - name: PAPERLESS_DBPASS
+              value: "$(PG_PASSWORD)"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+            - name: PAPERLESS_REDIS
+              value: "redis://:$(REDIS_PASSWORD)@redis.redis.svc.cluster.local:6379"
+            - name: PAPERLESS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-credentials
+                  key: SECRET_KEY
+            - name: PAPERLESS_URL
+              value: "https://paperless.${DOMAIN}"
+            - name: PAPERLESS_ENABLE_HTTP_REMOTE_USER
+              value: "false"
+            - name: PAPERLESS_OCR_LANGUAGE
+              value: "deu+eng"
+            - name: PAPERLESS_TIME_ZONE
+              value: "Europe/Berlin"
+            - name: PAPERLESS_DATA_DIR
+              value: "/usr/src/paperless/data"
+            - name: PAPERLESS_MEDIA_ROOT
+              value: "/usr/src/paperless/media"
+            - name: PAPERLESS_CONSUMPTION_DIR
+              value: "/usr/src/paperless/consume"
+            - name: PAPERLESS_ENABLE_FLOWER
+              value: "false"
+            - name: PAPERLESS_METRICS
+              value: "true"
+          volumeMounts:
+            - name: data
+              mountPath: /usr/src/paperless/data
+            - name: media
+              mountPath: /usr/src/paperless/media
+            - name: consume
+              mountPath: /usr/src/paperless/consume
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1536Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: paperless-data
+        - name: media
+          persistentVolumeClaim:
+            claimName: paperless-media
+        - name: consume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paperless
+  namespace: paperless
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: paperless.${DOMAIN}
+spec:
+  selector:
+    app: paperless
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: paperless
+  namespace: paperless
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - paperless.${DOMAIN}
+      secretName: paperless-tls
+  rules:
+    - host: paperless.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: paperless
+                port:
+                  number: 8000
