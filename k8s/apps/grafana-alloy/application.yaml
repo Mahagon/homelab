@@ -22,6 +22,9 @@ spec:
               enabled: false
           controller:
             type: daemonset
+            podAnnotations:
+              prometheus.io/scrape: "true"
+              prometheus.io/port: "12345"
           serviceAccount:
             create: true
           crds:
