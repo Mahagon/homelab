@@ -98,6 +98,10 @@ spec:
               value: "/usr/src/paperless/media"
             - name: PAPERLESS_CONSUMPTION_DIR
               value: "/usr/src/paperless/consume"
+            - name: PAPERLESS_TASK_WORKERS
+              value: "2"
+            - name: PAPERLESS_THREADS_PER_WORKER
+              value: "2"
             - name: PAPERLESS_ENABLE_FLOWER
               value: "false"
             - name: PAPERLESS_METRICS
