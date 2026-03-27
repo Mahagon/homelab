@@ -256,6 +256,14 @@ data:
 
     loki.source.kubernetes_events "cluster_events" {
       namespaces = []
+      forward_to = [loki.relabel.kubernetes_events.receiver]
+    }
+
+    loki.relabel "kubernetes_events" {
+      rule {
+        replacement = "integrations/kubernetes/eventhandler"
+        target_label = "job"
+      }
       forward_to = [loki.write.grafana_cloud.receiver]
     }
 
