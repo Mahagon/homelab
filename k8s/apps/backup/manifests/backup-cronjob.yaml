@@ -10,10 +10,11 @@ metadata:
     helm.sh/resource-policy: keep
 type: Opaque
 ---
+# Daily: SSD PVCs + PostgreSQL dump
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: homelab-backup
+  name: homelab-backup-daily
   namespace: backup
 spec:
   # Mon-Sat at 01:00 - skip Sunday to avoid conflicts with Zincati update window (Sun 03:00-05:00)
@@ -27,7 +28,6 @@ spec:
         spec:
           restartPolicy: Never
           initContainers:
-            # Dump PostgreSQL before restic backup
             - name: pg-dump
               image: postgres:18-alpine
               command: ["/bin/sh", "-c"]
@@ -59,6 +59,7 @@ spec:
 
                   export RESTIC_REPOSITORY=/backup/restic-repo
                   export RESTIC_PASSWORD="$RESTIC_PASSWORD"
+                  export GOMAXPROCS=2
 
                   # Initialise repo on first run
                   if ! restic snapshots &>/dev/null; then
@@ -69,21 +70,24 @@ spec:
                   echo "==> Backing up SSD PVCs (config/data volumes)..."
                   restic backup /data/ssd --tag pvcs-ssd
 
-                  echo "==> Backing up HDD PVCs (media volumes)..."
-                  restic backup /data/hdd --tag pvcs-hdd
-
                   echo "==> Backing up PostgreSQL dump..."
                   restic backup /pgdump --tag postgresql
 
-                  echo "==> Pruning old snapshots..."
+                  echo "==> Pruning old SSD/PostgreSQL snapshots..."
                   restic forget \
-                    --tag pvcs-ssd --tag pvcs-hdd --tag postgresql \
+                    --tag pvcs-ssd \
+                    --keep-daily 7 \
+                    --keep-weekly 4 \
+                    --keep-monthly 6 \
+                    --prune
+                  restic forget \
+                    --tag postgresql \
                     --keep-daily 7 \
                     --keep-weekly 4 \
                     --keep-monthly 6 \
                     --prune
 
-                  echo "==> Backup complete."
+                  echo "==> Daily backup complete."
                   restic snapshots
               env:
                 - name: RESTIC_PASSWORD
@@ -91,14 +95,14 @@ spec:
                     secretKeyRef:
                       name: restic-credentials
                       key: password
+              resources:
+                limits:
+                  cpu: "2"
               volumeMounts:
                 - name: backup
                   mountPath: /backup
                 - name: pvc-ssd
                   mountPath: /data/ssd
-                  readOnly: true
-                - name: pvc-hdd
-                  mountPath: /data/hdd
                   readOnly: true
                 - name: pgdump
                   mountPath: /pgdump
@@ -112,9 +116,76 @@ spec:
               hostPath:
                 path: /var/lib/homelab
                 type: Directory
+            - name: pgdump
+              emptyDir: {}
+---
+# Weekly: HDD PVCs (media volumes)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: homelab-backup-weekly
+  namespace: backup
+spec:
+  # Saturday at 03:00
+  schedule: "0 3 * * 6"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: restic
+              image: restic/restic:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+
+                  export RESTIC_REPOSITORY=/backup/restic-repo
+                  export RESTIC_PASSWORD="$RESTIC_PASSWORD"
+                  export GOMAXPROCS=2
+
+                  # Initialise repo on first run
+                  if ! restic snapshots &>/dev/null; then
+                    echo "==> Initialising restic repository..."
+                    restic init
+                  fi
+
+                  echo "==> Backing up HDD PVCs (media volumes)..."
+                  restic backup /data/hdd --tag pvcs-hdd
+
+                  echo "==> Pruning old HDD snapshots..."
+                  restic forget \
+                    --tag pvcs-hdd \
+                    --keep-weekly 8 \
+                    --prune
+
+                  echo "==> Weekly backup complete."
+                  restic snapshots
+              env:
+                - name: RESTIC_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: restic-credentials
+                      key: password
+              resources:
+                limits:
+                  cpu: "2"
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                - name: pvc-hdd
+                  mountPath: /data/hdd
+                  readOnly: true
+          volumes:
+            - name: backup
+              hostPath:
+                path: /var/mnt/backup
+                type: Directory
             - name: pvc-hdd
               hostPath:
                 path: /var/mnt/data
                 type: Directory
-            - name: pgdump
-              emptyDir: {}
