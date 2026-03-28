@@ -88,6 +88,12 @@ spec:
               value: "deu+eng"
             - name: PAPERLESS_OCR_SKIP_ARCHIVE_FILE
               value: "with_text"
+            - name: PAPERLESS_OCR_DESKEW
+              value: "true"
+            - name: PAPERLESS_OCR_ROTATE_PAGES
+              value: "true"
+            - name: PAPERLESS_OCR_CLEAN
+              value: "clean"
             - name: PAPERLESS_FILENAME_FORMAT
               value: "{{ created_year }}/{{ correspondent }}/{{ title }}"
             - name: PAPERLESS_TIME_ZONE
