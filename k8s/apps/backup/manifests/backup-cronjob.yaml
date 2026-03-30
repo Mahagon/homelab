@@ -74,6 +74,7 @@ spec:
                   restic backup /pgdump --tag postgresql
 
                   echo "==> Pruning old SSD/PostgreSQL snapshots..."
+                  restic unlock --remove-all
                   restic forget \
                     --tag pvcs-ssd \
                     --keep-daily 7 \
@@ -158,6 +159,7 @@ spec:
                   restic backup /data/hdd --tag pvcs-hdd
 
                   echo "==> Pruning old HDD snapshots..."
+                  restic unlock --remove-all
                   restic forget \
                     --tag pvcs-hdd \
                     --keep-weekly 8 \
