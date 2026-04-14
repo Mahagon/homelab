@@ -35,7 +35,7 @@ spec:
         fsGroup: 65534
       containers:
         - name: vaultwarden
-          image: vaultwarden/server:1.35.4
+          image: vaultwarden/server:1.35.7
           ports:
             - containerPort: 80
               name: http
