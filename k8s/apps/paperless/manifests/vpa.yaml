@@ -7,10 +7,5 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: paperless
-  resourcePolicy:
-    containerPolicies:
-      - containerName: paperless
-        minAllowed:
-          memory: 2Gi
   updatePolicy:
     updateMode: InPlaceOrRecreate
