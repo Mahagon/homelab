@@ -206,11 +206,20 @@ data:
       external_labels = {
         cluster = "homelab",
       }
+      wal {
+        truncate_frequency = "30m"
+        min_keepalive_time = "1m"
+        max_keepalive_time = "5m"
+      }
       endpoint {
         url = nonsensitive(remote.kubernetes.secret.grafana_cloud.data["METRICS_URL"])
         basic_auth {
           username = nonsensitive(remote.kubernetes.secret.grafana_cloud.data["METRICS_USERNAME"])
           password = remote.kubernetes.secret.grafana_cloud.data["API_KEY"]
+        }
+        queue_config {
+          max_shards = 5
+          capacity   = 2500
         }
       }
     }

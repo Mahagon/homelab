@@ -20,6 +20,11 @@ spec:
               varlog: true
             clustering:
               enabled: false
+            extraEnv:
+              - name: GOMEMLIMIT
+                value: "200MiB"
+          configReloader:
+            enabled: false
           controller:
             type: daemonset
             podAnnotations:
