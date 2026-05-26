@@ -7,19 +7,22 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   project: default
-  source:
-    repoURL: https://helm.mittwald.de
-    chart: kubernetes-secret-generator
-    targetRevision: 3.4.1
-    helm:
-      values: |
-        resources:
-          requests:
-            cpu: 10m
-            memory: 48Mi
-          limits:
-            cpu: 100m
-            memory: 64Mi
+  sources:
+    - repoURL: https://helm.mittwald.de
+      chart: kubernetes-secret-generator
+      targetRevision: 3.4.1
+      helm:
+        values: |
+          resources:
+            requests:
+              cpu: 10m
+              memory: 48Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+    - repoURL: git@github.com:Mahagon/homelab.git
+      targetRevision: main
+      path: k8s/apps/secret-generator/manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
