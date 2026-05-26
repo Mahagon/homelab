@@ -16,10 +16,10 @@ spec:
         resources:
           requests:
             cpu: 10m
-            memory: 32Mi
+            memory: 48Mi
           limits:
             cpu: 100m
-            memory: 48Mi
+            memory: 64Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
