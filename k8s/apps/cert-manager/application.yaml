@@ -23,7 +23,7 @@ spec:
               cpu: 50m
               memory: 64Mi
             limits:
-              memory: 128Mi
+              memory: 80Mi
     # ClusterIssuers (sync-wave 1, after CRDs are ready)
     - repoURL: git@github.com:Mahagon/homelab.git
       targetRevision: main
