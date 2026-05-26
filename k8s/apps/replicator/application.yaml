@@ -19,7 +19,7 @@ spec:
             memory: 32Mi
           limits:
             cpu: 100m
-            memory: 64Mi
+            memory: 48Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
