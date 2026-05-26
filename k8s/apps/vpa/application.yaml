@@ -18,9 +18,9 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 48Mi
             limits:
-              memory: 128Mi
+              memory: 48Mi
           extraArgs:
             feature-gates: InPlaceOrRecreate=true
         recommender:
@@ -28,18 +28,18 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 48Mi
             limits:
-              memory: 128Mi
+              memory: 48Mi
           round-memory-bytes: "1048576"
         updater:
           revisionHistoryLimit: 0
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 48Mi
             limits:
-              memory: 128Mi
+              memory: 48Mi
           extraArgs:
             feature-gates: InPlaceOrRecreate=true
   destination:
