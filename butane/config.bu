@@ -113,6 +113,17 @@ storage:
           data-dir: /var/lib/rancher/k3s
           # Default local-path storage on HDD
           default-local-storage-path: /var/mnt/data
+          # No NetworkPolicy resources in use; drop the embedded kube-router netpol controller
+          disable-network-policy: true
+
+    # Cap journald RAM and disk usage
+    - path: /etc/systemd/journald.conf.d/00-limit.conf
+      mode: 0644
+      contents:
+        inline: |
+          [Journal]
+          RuntimeMaxUse=64M
+          SystemMaxUse=200M
 
     # K3s install script (runs once via systemd)
     - path: /usr/local/bin/install-k3s.sh
@@ -226,6 +237,24 @@ storage:
 
 systemd:
   units:
+    # Mask host services that aren't useful on a headless homelab.
+    # fwupd: desktop firmware updates; CoreOS updates itself via zincati/rpm-ostree
+    # udisks2: desktop disk auto-mount; mounts here are systemd units
+    # gssproxy: only needed for NFS+Kerberos
+    # systemd-homed: portable home directories; only the static `core` user exists
+    - name: fwupd.service
+      mask: true
+    - name: fwupd-refresh.service
+      mask: true
+    - name: fwupd-refresh.timer
+      mask: true
+    - name: udisks2.service
+      mask: true
+    - name: gssproxy.service
+      mask: true
+    - name: systemd-homed.service
+      mask: true
+
     # One-shot: install K3s on first boot
     - name: install-k3s.service
       enabled: true
