@@ -108,6 +108,7 @@ storage:
           tls-san:
             - "homelab"
             - "homelab.local"
+            - "homelab.localdomain"
           # servicelb (klipper) assigns the node IP to LoadBalancer services (e.g. Traefik)
           # Use the SSD for K3s data
           data-dir: /var/lib/rancher/k3s
