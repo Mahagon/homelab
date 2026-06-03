@@ -67,7 +67,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       initContainers:
         - name: init-config
-          image: busybox:stable
+          image: busybox:1.38.0
           command: [sh, /scripts/init-config.sh]
           env:
             - name: PG_PASSWORD
@@ -84,7 +84,7 @@ spec:
               mountPath: /scripts
       containers:
         - name: home-assistant
-          image: ghcr.io/home-assistant/home-assistant:stable
+          image: ghcr.io/home-assistant/home-assistant:2026.5.4
           securityContext:
             capabilities:
               add:
