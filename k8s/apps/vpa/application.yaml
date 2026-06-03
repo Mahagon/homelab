@@ -33,6 +33,7 @@ spec:
                 memory: 48Mi
             extraArgs:
               humanize-memory: "true"
+              pod-recommendation-min-memory-mb: "25"
           updater:
             revisionHistoryLimit: 0
             resources:
