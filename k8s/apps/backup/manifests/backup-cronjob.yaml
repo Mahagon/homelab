@@ -29,7 +29,7 @@ spec:
           restartPolicy: Never
           initContainers:
             - name: pg-dump
-              image: postgres:18-alpine
+              image: postgres:18.4-alpine3.23
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -51,7 +51,7 @@ spec:
                   mountPath: /pgdump
           containers:
             - name: restic
-              image: restic/restic:latest
+              image: restic/restic:0.18.1
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -139,7 +139,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: restic
-              image: restic/restic:latest
+              image: restic/restic:0.18.1
               command: ["/bin/sh", "-c"]
               args:
                 - |
