@@ -34,6 +34,14 @@ spec:
           controller:
             metrics:
               enabled: true
+            extraArgs:
+              - --status-processors=5
+              - --operation-processors=3
+              - --kubectl-parallelism-limit=5
+              - --app-resync=300
+            env:
+              - name: GOGC
+                value: "20"
           server:
             metrics:
               enabled: true
