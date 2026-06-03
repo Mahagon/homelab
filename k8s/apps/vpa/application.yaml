@@ -31,6 +31,8 @@ spec:
                 memory: 48Mi
               limits:
                 memory: 48Mi
+            extraArgs:
+              humanize-memory: "true"
           updater:
             revisionHistoryLimit: 0
             resources:
