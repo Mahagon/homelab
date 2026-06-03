@@ -32,7 +32,7 @@ spec:
               limits:
                 memory: 48Mi
             extraArgs:
-              humanize-memory: "true"
+              round-memory-bytes: "1048576"
               pod-recommendation-min-memory-mb: "25"
           updater:
             revisionHistoryLimit: 0
