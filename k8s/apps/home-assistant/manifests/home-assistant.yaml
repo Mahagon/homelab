@@ -87,16 +87,17 @@ spec:
           command: [sh, -c]
           args:
             - |
-              if [ -d /config/custom_components/hacs ]; then
-                echo "HACS already installed, skipping."
+              HACS_VERSION="2.0.5"
+              installed=$(grep -o '"version": *"[^"]*"' /config/custom_components/hacs/manifest.json 2>/dev/null | grep -o '[0-9][^"]*')
+              if [ "$installed" = "$HACS_VERSION" ]; then
+                echo "HACS $HACS_VERSION already installed, skipping."
                 exit 0
               fi
-              echo "Installing HACS ..."
               apk add --no-cache wget unzip
-              wget -O /tmp/hacs.zip "https://github.com/hacs/integration/releases/download/2.0.5/hacs.zip"
+              wget -O /tmp/hacs.zip "https://github.com/hacs/integration/releases/download/${HACS_VERSION}/hacs.zip"
+              rm -rf /config/custom_components/hacs
               mkdir -p /config/custom_components/hacs
               unzip /tmp/hacs.zip -d /config/custom_components/hacs
-              echo "HACS installed."
           volumeMounts:
             - name: config
               mountPath: /config

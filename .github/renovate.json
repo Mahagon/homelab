@@ -30,7 +30,7 @@
         "/k8s/apps/home-assistant/manifests/home-assistant\\.yaml$/"
       ],
       "matchStrings": [
-        "hacs/integration/releases/download/(?<currentValue>[^/]+)/hacs\\.zip"
+        "HACS_VERSION=\"(?<currentValue>[^\"]+)\""
       ],
       "depNameTemplate": "hacs/integration",
       "datasourceTemplate": "github-releases",
