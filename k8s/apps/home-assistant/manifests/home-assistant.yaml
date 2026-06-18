@@ -83,7 +83,7 @@ spec:
             - name: scripts
               mountPath: /scripts
         - name: install-hacs
-          image: alpine:3.21@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339
+          image: alpine:3.24@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f
           command: [sh, -c]
           args:
             - |
