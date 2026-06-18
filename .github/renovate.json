@@ -22,5 +22,19 @@
       "/k8s/apps/.+/manifests/.+\\.yaml$/"
     ],
     "pinDigests": true
-  }
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/k8s/apps/home-assistant/manifests/home-assistant\\.yaml$/"
+      ],
+      "matchStrings": [
+        "hacs/integration/releases/download/(?<currentValue>[^/]+)/hacs\\.zip"
+      ],
+      "depNameTemplate": "hacs/integration",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    }
+  ]
 }
