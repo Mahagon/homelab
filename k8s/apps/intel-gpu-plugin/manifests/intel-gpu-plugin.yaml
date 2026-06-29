@@ -1,0 +1,84 @@
+# Intel GPU device plugin (vendored from upstream v0.36.0).
+# Advertises gpu.intel.com/i915 and injects /dev/dri devices into requesting
+# pods through the kubelet device-plugin API, which sets up the device cgroup
+# (and SELinux labelling) correctly -- a plain hostPath mount does not, so on
+# this SELinux-enforcing CoreOS node ffmpeg could not even open() renderD128.
+# Bay Trail (Gen7) only supports the i965 VA driver -> H.264 only, ~1080p.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: intel-gpu-plugin
+  namespace: kube-system
+  labels:
+    app: intel-gpu-plugin
+spec:
+  selector:
+    matchLabels:
+      app: intel-gpu-plugin
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: intel-gpu-plugin
+    spec:
+      containers:
+        - name: intel-gpu-plugin
+          image: intel/intel-gpu-plugin:0.36.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          securityContext:
+            seLinuxOptions:
+              type: "container_device_plugin_t"
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              memory: "45Mi"
+              cpu: 40m
+            limits:
+              memory: "90Mi"
+              cpu: 100m
+          volumeMounts:
+            - name: devfs
+              mountPath: /dev/dri
+              readOnly: true
+            - name: sysfsdrm
+              mountPath: /sys/class/drm
+              readOnly: true
+            - name: kubeletsockets
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: cdipath
+              mountPath: /var/run/cdi
+      volumes:
+        - name: devfs
+          hostPath:
+            path: /dev/dri
+        - name: sysfsdrm
+          hostPath:
+            path: /sys/class/drm
+        - name: kubeletsockets
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: cdipath
+          hostPath:
+            path: /var/run/cdi
+            type: DirectoryOrCreate
+      nodeSelector:
+        kubernetes.io/arch: amd64
