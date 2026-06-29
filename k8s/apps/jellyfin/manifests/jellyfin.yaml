@@ -59,6 +59,8 @@ spec:
               mountPath: /config
             - name: media
               mountPath: /media
+            - name: transcodes
+              mountPath: /config/transcodes
             - name: render-device
               mountPath: /dev/dri
           resources:
@@ -66,7 +68,9 @@ spec:
               cpu: 200m
               memory: 512Mi
             limits:
-              memory: 1Gi
+              # Hardware (VAAPI) transcodes of 4K content spike well past 1Gi;
+              # too low a limit OOM-kills ffmpeg the instant it starts.
+              memory: 4Gi
           livenessProbe:
             httpGet:
               path: /health
@@ -80,6 +84,8 @@ spec:
         - name: media
           persistentVolumeClaim:
             claimName: jellyfin-media
+        - name: transcodes
+          emptyDir: {}
         - name: render-device
           hostPath:
             path: /dev/dri
