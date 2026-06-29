@@ -42,10 +42,16 @@ spec:
         app: jellyfin
     spec:
       securityContext:
-        supplementalGroups: [39, 105] # video + render groups for the GPU devices the plugin injects
+        supplementalGroups: [39, 105] # 39=video (card1), 105=render (renderD128)
       containers:
         - name: jellyfin
           image: jellyfin/jellyfin:10.11.11@sha256:aefb67e6a7ff1debdd154a78a7bbb780fd0c873d8639210a7f6a2016ad2b35db
+          securityContext:
+            # SELinux is Enforcing on this CoreOS node and a plain hostPath
+            # device can't pass the cgroup/SELinux check, so root ffmpeg can't
+            # open() renderD128. privileged opens the device cgroup and runs the
+            # container unconfined (spc_t) so VAAPI can reach the iGPU.
+            privileged: true
           ports:
             - containerPort: 8096
               name: http
@@ -65,13 +71,14 @@ spec:
               mountPath: /media
             - name: cache
               mountPath: /cache # Jellyfin writes its cache + /cache/transcodes here
+            - name: render-device
+              mountPath: /dev/dri
           resources:
             requests:
               cpu: 200m
               memory: 512Mi
             limits:
               memory: 2Gi
-              gpu.intel.com/i915: 1 # injected by the intel-gpu-plugin DaemonSet
           livenessProbe:
             httpGet:
               path: /health
@@ -87,6 +94,10 @@ spec:
             claimName: jellyfin-media
         - name: cache
           emptyDir: {}
+        - name: render-device
+          hostPath:
+            path: /dev/dri
+            type: Directory
 ---
 apiVersion: v1
 kind: Service
