@@ -20,6 +20,7 @@ graph TD
                 CertManager["cert-manager"]
                 ExternalDNS["external-dns"]
                 Cloudflared["cloudflared (2 connectors)"]
+                AlexaProxy["Alexa proxy (2 replicas)"]
                 Replicator["kubernetes-replicator"]
                 VPA["Vertical Pod Autoscaler"]
 
@@ -33,6 +34,8 @@ graph TD
                 end
 
                 Traefik --> apps
+                Cloudflared --> AlexaProxy
+                AlexaProxy --> HomeAssistant
                 ArgoCD -->|reconciles| apps
                 Replicator -->|syncs secrets| apps
                 VPA -->|adjusts resources| apps
@@ -56,7 +59,8 @@ graph TD
 - Cloudflare account + API token (Zone:DNS:Edit + Zone:Zone:Read permissions)
 - kubectl + helm CLI
 - A workstation on the same network
-- AWS and Amazon Developer accounts for the optional Alexa integration
+- Amazon Developer account for the optional Alexa integration (the primary
+  deployment path runs entirely in K3s; AWS is not required)
 
 ## Setup Order
 
@@ -181,7 +185,8 @@ Secrets are handled automatically - no manual secret creation needed after boots
 DNS records are created automatically by external-dns once it starts.
 
 For outbound-only Home Assistant remote access and the private German Alexa
-integration, follow [docs/home-assistant-alexa.md](docs/home-assistant-alexa.md).
+integration, follow [docs/home-assistant-alexa-proxy.md](docs/home-assistant-alexa-proxy.md).
+The older AWS Lambda variant is documented separately for reference.
 The associated cost-aware CIS evidence and exceptions are documented in
 [docs/security-compliance.md](docs/security-compliance.md).
 

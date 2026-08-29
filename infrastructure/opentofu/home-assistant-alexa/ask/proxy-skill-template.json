@@ -1,0 +1,40 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "locales": {
+        "de-DE": {
+          "name": "Mein Zuhause",
+          "summary": "Private Alexa-Anbindung für Home Assistant.",
+          "description": "Diese private Smart-Home-Skill verbindet Alexa mit der eigenen Home-Assistant-Instanz.",
+          "smallIconUri": "${SMALL_ICON_URI}",
+          "largeIconUri": "${LARGE_ICON_URI}",
+          "examplePhrases": [
+            "Alexa, Wohnzimmer Licht einschalten.",
+            "Alexa, alle Rollläden öffnen."
+          ],
+          "keywords": ["Home Assistant", "Licht", "Rollläden"]
+        }
+      },
+      "isAvailableWorldwide": false,
+      "testingInstructions": "Private development skill for the owner.",
+      "category": "SMART_HOME",
+      "distributionCountries": ["DE"]
+    },
+    "apis": {
+      "smartHome": {
+        "endpoint": {
+          "uri": "${ENDPOINT_URL}"
+        },
+        "protocolVersion": "3"
+      }
+    },
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "containsAds": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true
+    }
+  }
+}
