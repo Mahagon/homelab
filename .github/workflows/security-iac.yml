@@ -131,8 +131,9 @@ jobs:
           -strict -summary /work
 
       - name: Scan IaC misconfigurations
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
+          version: v0.74.0
           scan-type: fs
           scan-ref: infrastructure/opentofu/home-assistant-alexa
           scanners: misconfig
@@ -142,8 +143,9 @@ jobs:
           hide-progress: true
 
       - name: Scan cloudflared manifests
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
+          version: v0.74.0
           scan-type: config
           scan-ref: k8s/apps/cloudflared/manifests
           severity: HIGH,CRITICAL
@@ -151,8 +153,9 @@ jobs:
           hide-progress: true
 
       - name: Scan cloudflared image
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
+          version: v0.74.0
           scan-type: image
           image-ref: cloudflare/cloudflared:2026.8.1@sha256:d9ff527dc19799e24d3689058161fb01e752a24be1823577bae54c9c2489275f
           severity: HIGH,CRITICAL
@@ -161,8 +164,9 @@ jobs:
           hide-progress: true
 
       - name: Scan entire repository for secrets
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
+          version: v0.74.0
           scan-type: fs
           scan-ref: .
           scanners: secret
