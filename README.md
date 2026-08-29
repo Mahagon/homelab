@@ -7,6 +7,7 @@ Declarative home lab running on a GA-J1900N-D3V (8GB RAM, 256GB SSD, 4TB HDD).
 ```mermaid
 graph TD
     Internet -->|HTTPS| Traefik
+    RemoteUsers["Remote users / Alexa"] -->|HTTPS| CloudflareTunnel["Cloudflare Tunnel"]
     Git["Git repo (github.com/Mahagon/homelab)"] -->|GitOps| ArgoCD
     ExternalDNS -->|A records| Cloudflare["Cloudflare DNS"]
     CertManager -->|DNS-01 challenge| Cloudflare
@@ -18,6 +19,7 @@ graph TD
                 Traefik["Traefik (ingress)"]
                 CertManager["cert-manager"]
                 ExternalDNS["external-dns"]
+                Cloudflared["cloudflared (2 connectors)"]
                 Replicator["kubernetes-replicator"]
                 VPA["Vertical Pod Autoscaler"]
 
@@ -34,6 +36,7 @@ graph TD
                 ArgoCD -->|reconciles| apps
                 Replicator -->|syncs secrets| apps
                 VPA -->|adjusts resources| apps
+                Cloudflared -->|internal HTTP 8123| HomeAssistant
             end
 
             SSD["SSD 256GB - OS, K3s state, fast PVs"]
@@ -44,6 +47,7 @@ graph TD
 
     apps --> SSD
     apps --> HDD
+    CloudflareTunnel -->|outbound tunnel connection| Cloudflared
 ```
 
 ## Prerequisites
@@ -52,6 +56,7 @@ graph TD
 - Cloudflare account + API token (Zone:DNS:Edit + Zone:Zone:Read permissions)
 - kubectl + helm CLI
 - A workstation on the same network
+- AWS and Amazon Developer accounts for the optional Alexa integration
 
 ## Setup Order
 
@@ -174,6 +179,11 @@ Secrets are handled automatically - no manual secret creation needed after boots
 - **kubernetes-replicator** pushes the PostgreSQL and Redis passwords to app namespaces
 
 DNS records are created automatically by external-dns once it starts.
+
+For outbound-only Home Assistant remote access and the private German Alexa
+integration, follow [docs/home-assistant-alexa.md](docs/home-assistant-alexa.md).
+The associated cost-aware CIS evidence and exceptions are documented in
+[docs/security-compliance.md](docs/security-compliance.md).
 
 ### 5. Run Tests
 
