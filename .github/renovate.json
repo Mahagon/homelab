@@ -23,6 +23,19 @@
     ],
     "pinDigests": true
   },
+  "terraform": {
+    "managerFilePatterns": [
+      "/infrastructure/opentofu/.+\\.tf$/"
+    ]
+  },
+  "packageRules": [
+    {
+      "matchManagers": [
+        "terraform"
+      ],
+      "groupName": "OpenTofu providers"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",

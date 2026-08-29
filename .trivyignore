@@ -1,0 +1,4 @@
+# Cost-aware exception: the OpenTofu bootstrap state bucket uses SSE-S3 (AES256)
+# instead of a customer-managed KMS key to avoid recurring KMS charges. Revisit
+# if the homelab moves to a paid compliance baseline.
+AWS-0132
