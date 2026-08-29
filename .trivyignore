@@ -2,3 +2,19 @@
 # instead of a customer-managed KMS key to avoid recurring KMS charges. Revisit
 # if the homelab moves to a paid compliance baseline.
 AWS-0132
+
+# Temporary upstream-image exception (review 2026-09-15): cloudflare/cloudflared
+# 2026.8.2 is the current official image, but its embedded Go toolchain and
+# Debian OpenSSL packages have fixes available that Cloudflare has not yet
+# shipped in a newer image. Keep the image digest pinned and remove these IDs
+# as soon as a patched cloudflared release is available.
+CVE-2026-14456
+CVE-2026-33818
+CVE-2026-39821
+CVE-2026-39822
+CVE-2026-46600
+CVE-2026-56853
+CVE-2026-56858
+CVE-2026-56859
+CVE-2026-56860
+CVE-2026-56862
