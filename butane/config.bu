@@ -114,8 +114,9 @@ storage:
           data-dir: /var/lib/rancher/k3s
           # Default local-path storage on HDD
           default-local-storage-path: /var/mnt/data
-          # No NetworkPolicy resources in use; drop the embedded kube-router netpol controller
-          disable-network-policy: true
+          # NetworkPolicy enforcement is required by the cloudflared namespace.
+          # Existing namespaces remain unaffected until they define policies.
+          disable-network-policy: false
 
     # Cap journald RAM and disk usage
     - path: /etc/systemd/journald.conf.d/00-limit.conf
