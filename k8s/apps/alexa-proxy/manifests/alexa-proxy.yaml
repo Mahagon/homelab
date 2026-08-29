@@ -1,0 +1,278 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: alexa-proxy
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alexa-proxy
+  namespace: alexa-proxy
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alexa-proxy
+  namespace: alexa-proxy
+data:
+  proxy.py: |
+    import http.client
+    import json
+    import logging
+    import os
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import urlsplit
+
+    LISTEN = ("0.0.0.0", 8080)
+    ORIGIN = os.environ.get("HOME_ASSISTANT_URL", "http://192.168.178.10:8123")
+    MAX_BYTES = 1024 * 1024
+    TIMEOUT = 6.5
+    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(message)s")
+    LOGGER = logging.getLogger("alexa-proxy")
+    parsed = urlsplit(ORIGIN)
+    if parsed.scheme != "http" or not parsed.hostname or parsed.path not in ("", "/"):
+        raise RuntimeError("HOME_ASSISTANT_URL must be an http origin URL")
+
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "alexa-proxy/1.0"
+
+        def log_message(self, format, *args):
+            LOGGER.info("request method=%s path=%s status=%s", self.command, self.path, args[1] if len(args) > 1 else "unknown")
+
+        def send_json(self, status, payload):
+            body = json.dumps(payload, separators=(",", ":")).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path in ("/healthz", "/readyz"):
+                self.send_json(200, {"status": "ok"})
+            else:
+                self.send_error(404)
+
+        def do_POST(self):
+            if self.path != "/api/alexa/smart_home":
+                self.send_error(404)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "-1"))
+            except ValueError:
+                length = -1
+            if length < 0 or length > MAX_BYTES:
+                self.send_json(413, {"error": "request_too_large"})
+                return
+            authorization = self.headers.get("Authorization", "")
+            if not authorization.startswith("Bearer ") or len(authorization) < 8:
+                self.send_json(401, {"error": "missing_authorization"})
+                return
+            body = self.rfile.read(length)
+            try:
+                event = json.loads(body)
+                if not isinstance(event, dict):
+                    raise ValueError("directive must be an object")
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                self.send_json(400, {"error": "invalid_json"})
+                return
+            try:
+                connection = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=TIMEOUT)
+                connection.request("POST", "/api/alexa/smart_home", body=json.dumps(event).encode(), headers={
+                    "Authorization": authorization,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "User-Agent": "home-assistant-alexa-proxy/1.0",
+                })
+                response = connection.getresponse()
+                response_body = response.read(MAX_BYTES + 1)
+                status = response.status
+                content_type = response.getheader("Content-Type", "application/json")
+                connection.close()
+                if len(response_body) > MAX_BYTES:
+                    self.send_json(502, {"error": "origin_response_too_large"})
+                    return
+                self.send_response(status)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(response_body)))
+                self.end_headers()
+                self.wfile.write(response_body)
+            except (OSError, TimeoutError):
+                LOGGER.warning("Home Assistant origin unavailable")
+                self.send_json(502, {"error": "origin_unavailable"})
+
+    ThreadingHTTPServer(LISTEN, Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alexa-proxy
+  namespace: alexa-proxy
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alexa-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alexa-proxy
+    spec:
+      serviceAccountName: alexa-proxy
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxy
+          image: python:3.14-alpine@sha256:05b2b8b732ecd268fee8727a369f936f022d1321b59befd13c30ede22769dcdc
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/app/proxy.py"]
+          env:
+            - name: HOME_ASSISTANT_URL
+              value: http://192.168.178.10:8123
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 96Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+      volumes:
+        - name: app
+          configMap:
+            name: alexa-proxy
+            defaultMode: 0555
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alexa-proxy
+  namespace: alexa-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: alexa-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: alexa-proxy
+  namespace: alexa-proxy
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alexa-proxy
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: alexa-proxy
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cloudflared-ingress
+  namespace: alexa-proxy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alexa-proxy
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflared
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-origin-egress
+  namespace: alexa-proxy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alexa-proxy
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 192.168.178.10/32
+      ports:
+        - protocol: TCP
+          port: 8123
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: alexa-proxy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alexa-proxy
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

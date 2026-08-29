@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alexa-proxy
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Mahagon/homelab.git
+    targetRevision: main
+    path: k8s/apps/alexa-proxy/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: alexa-proxy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

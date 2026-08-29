@@ -1,4 +1,7 @@
-# Home Assistant remote access and Alexa without Home Assistant Cloud
+# Legacy AWS variant: Home Assistant remote access and Alexa
+
+> For the zero-AWS deployment, use [home-assistant-alexa-proxy.md](home-assistant-alexa-proxy.md).
+> This document remains as reference for the optional AWS Lambda architecture.
 
 This runbook publishes `homeassistant.danieljacobs.de` through an outbound-only
 Cloudflare Tunnel and connects a private German Alexa Smart Home skill through
@@ -176,7 +179,8 @@ token without writing it to disk:
 
 ```powershell
 $env:AWS_PROFILE = "homelab-admin"
-infrastructure/opentofu/home-assistant-alexa/scripts/set-cloudflared-secret.ps1
+infrastructure/opentofu/home-assistant-alexa/scripts/set-cloudflared-secret.ps1 `
+  -TofuDirectory infrastructure/opentofu/home-assistant-alexa/main
 kubectl rollout status deployment/cloudflared --namespace cloudflared
 kubectl get pods --namespace cloudflared
 ```
@@ -332,4 +336,3 @@ Expected examples:
   `publish_dns=false`. Do not restore an inbound port forward.
 - Versioned S3 state permits recovery of a prior state object. Restore only
   after copying the current version and reviewing an OpenTofu plan.
-

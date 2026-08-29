@@ -1,6 +1,6 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string]$TofuDirectory = (Join-Path $PSScriptRoot "..\main"),
+    [string]$TofuDirectory = (Join-Path $PSScriptRoot "..\cloudflare"),
     [string]$KubeContext
 )
 
@@ -55,4 +55,3 @@ finally {
     $secret = $null
     $token = $null
 }
-

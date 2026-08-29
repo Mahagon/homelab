@@ -28,3 +28,4 @@ override.tf.json
 
 # Local deployment artifacts
 infrastructure/opentofu/home-assistant-alexa/ask/rendered-skill.json
+infrastructure/opentofu/home-assistant-alexa/ask/rendered-proxy-skill.json
