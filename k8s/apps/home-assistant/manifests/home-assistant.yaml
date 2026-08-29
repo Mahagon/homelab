@@ -8,6 +8,8 @@ data:
     #!/bin/sh
     set -e
 
+    mkdir -p /config/integrations
+
     if [ -f /config/configuration.yaml ]; then
       echo "configuration.yaml already exists, skipping."
       exit 0
@@ -20,6 +22,9 @@ data:
 
     default_config:
 
+    homeassistant:
+      packages: !include_dir_named integrations
+
     recorder:
       db_url: !env_var RECORDER_DB_URL
 
@@ -30,6 +35,123 @@ data:
     HACFG
 
     echo "Done."
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-alexa-config
+  namespace: home-assistant
+data:
+  alexa.yaml: |
+    homeassistant:
+      external_url: https://homeassistant.${DOMAIN}
+      internal_url: https://homeassistant.${DOMAIN}
+      customize:
+        light.licht:
+          friendly_name: Esszimmer Licht
+        light.licht_2:
+          friendly_name: Wohnzimmer Licht
+        light.licht_3:
+          friendly_name: Küche Licht
+        light.licht_4:
+          friendly_name: Büro Licht
+        cover.rolladen:
+          friendly_name: Küche Rollladen
+          device_class: shutter
+        cover.rolladen_2:
+          friendly_name: Esszimmer Rollladen
+          device_class: shutter
+        cover.rolladen_3:
+          friendly_name: Gäste-WC Rollladen
+          device_class: shutter
+        cover.rolladen_4:
+          friendly_name: Schlafzimmer Rollladen
+          device_class: shutter
+        cover.rolladen_5:
+          friendly_name: Ankleidezimmer Rollladen
+          device_class: shutter
+        cover.rolladen_6:
+          friendly_name: Büro Rollladen
+          device_class: shutter
+        cover.rolladen_7:
+          friendly_name: Gästezimmer Rollladen
+          device_class: shutter
+        cover.rolladen_8:
+          friendly_name: Büro Privat Rollladen
+          device_class: shutter
+        cover.rolladen_9:
+          friendly_name: Badezimmer Rollladen
+          device_class: shutter
+        cover.shutters:
+          friendly_name: Alle Rollläden
+          device_class: shutter
+
+    http:
+      ip_ban_enabled: true
+      login_attempts_threshold: 5
+
+    alexa:
+      smart_home:
+        locale: de-DE
+        filter:
+          include_entities:
+            - light.licht
+            - light.licht_2
+            - light.licht_3
+            - light.licht_4
+            - cover.rolladen
+            - cover.rolladen_2
+            - cover.rolladen_3
+            - cover.rolladen_4
+            - cover.rolladen_5
+            - cover.rolladen_6
+            - cover.rolladen_7
+            - cover.rolladen_8
+            - cover.rolladen_9
+            - cover.shutters
+        entity_config:
+          light.licht:
+            name: Esszimmer Licht
+            display_categories: LIGHT
+          light.licht_2:
+            name: Wohnzimmer Licht
+            display_categories: LIGHT
+          light.licht_3:
+            name: Küche Licht
+            display_categories: LIGHT
+          light.licht_4:
+            name: Büro Licht
+            display_categories: LIGHT
+          cover.rolladen:
+            name: Küche Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_2:
+            name: Esszimmer Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_3:
+            name: Gäste-WC Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_4:
+            name: Schlafzimmer Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_5:
+            name: Ankleidezimmer Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_6:
+            name: Büro Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_7:
+            name: Gästezimmer Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_8:
+            name: Büro Privat Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.rolladen_9:
+            name: Badezimmer Rollladen
+            display_categories: INTERIOR_BLIND
+          cover.shutters:
+            name: Alle Rollläden
+            display_categories: INTERIOR_BLIND
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -125,6 +247,10 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
+            - name: alexa-config
+              mountPath: /config/integrations/alexa.yaml
+              subPath: alexa.yaml
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -145,14 +271,15 @@ spec:
           configMap:
             name: home-assistant-init-scripts
             defaultMode: 0755
+        - name: alexa-config
+          configMap:
+            name: home-assistant-alexa-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: home-assistant
   namespace: home-assistant
-  annotations:
-    external-dns.alpha.kubernetes.io/hostname: homeassistant.${DOMAIN}
 spec:
   selector:
     app: home-assistant
