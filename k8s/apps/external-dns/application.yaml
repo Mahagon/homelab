@@ -18,6 +18,8 @@ spec:
             name: cloudflare
           domainFilters:
             - ${DOMAIN}
+          excludeDomains:
+            - homeassistant.${DOMAIN}
           env:
             - name: CF_API_TOKEN
               valueFrom:
