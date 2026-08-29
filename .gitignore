@@ -9,3 +9,20 @@ tests/.pytest_cache/
 # OS
 .DS_Store
 *.swp
+
+# OpenTofu
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local deployment artifacts
+infrastructure/opentofu/home-assistant-alexa/ask/rendered-skill.json
