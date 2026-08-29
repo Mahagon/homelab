@@ -1,0 +1,171 @@
+name: Security and IaC checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".checkov.yml"
+      - ".tflint.hcl"
+      - "butane/**"
+      - "infrastructure/**"
+      - "k8s/apps/cloudflared/**"
+      - "k8s/apps/external-dns/**"
+      - "k8s/apps/home-assistant/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+      - ".checkov.yml"
+      - ".tflint.hcl"
+      - "butane/**"
+      - "infrastructure/**"
+      - "k8s/apps/cloudflared/**"
+      - "k8s/apps/external-dns/**"
+      - "k8s/apps/home-assistant/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-iac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  opentofu:
+    name: OpenTofu and Lambda
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@000eeb8522f0572907c393e8151076c205fdba1b # v1.0.6
+        with:
+          tofu_version: 1.12.5
+          tofu_wrapper: false
+
+      - name: Check formatting
+        run: tofu fmt -check -recursive infrastructure/opentofu/home-assistant-alexa
+
+      - name: Validate and test OpenTofu roots
+        shell: bash
+        run: |
+          set -euo pipefail
+          for root in bootstrap main; do
+            directory="infrastructure/opentofu/home-assistant-alexa/${root}"
+            tofu -chdir="${directory}" init -backend=false -input=false
+            tofu -chdir="${directory}" validate
+            tofu -chdir="${directory}" test -no-color
+          done
+
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
+
+      - name: Run TFLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl"
+          for root in bootstrap main; do
+            tflint \
+              --chdir="infrastructure/opentofu/home-assistant-alexa/${root}" \
+              --config="${GITHUB_WORKSPACE}/.tflint.hcl"
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.14"
+
+      - name: Test Lambda
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Install Checkov
+        run: python -m pip install --disable-pip-version-check checkov==3.3.15
+
+      - name: Check OpenTofu security
+        run: >-
+          checkov
+          --directory infrastructure/opentofu/home-assistant-alexa
+          --framework terraform
+
+      - name: Check cloudflared workload security
+        run: >-
+          checkov
+          --directory k8s/apps/cloudflared/manifests
+          --framework kubernetes
+
+  kubernetes:
+    name: Kubernetes and secret scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Render changed manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .rendered
+          sed \
+            -e 's/${DOMAIN}/example.invalid/g' \
+            -e 's/${EMAIL}/security@example.com/g' \
+            k8s/apps/cloudflared/manifests/cloudflared.yaml \
+            > .rendered/cloudflared.yaml
+          sed \
+            -e 's/${DOMAIN}/example.invalid/g' \
+            -e 's/${EMAIL}/security@example.com/g' \
+            k8s/apps/home-assistant/manifests/home-assistant.yaml \
+            > .rendered/home-assistant.yaml
+
+      - name: Validate Kubernetes schemas
+        run: >-
+          docker run --rm
+          --volume "${PWD}/.rendered:/work:ro"
+          ghcr.io/yannh/kubeconform@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
+          -strict -summary /work
+
+      - name: Scan IaC misconfigurations
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          scan-type: fs
+          scan-ref: infrastructure/opentofu/home-assistant-alexa
+          scanners: misconfig
+          trivyignores: .trivyignore
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          hide-progress: true
+
+      - name: Scan cloudflared manifests
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          scan-type: config
+          scan-ref: k8s/apps/cloudflared/manifests
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          hide-progress: true
+
+      - name: Scan cloudflared image
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          scan-type: image
+          image-ref: cloudflare/cloudflared:2026.8.1@sha256:d9ff527dc19799e24d3689058161fb01e752a24be1823577bae54c9c2489275f
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          hide-progress: true
+
+      - name: Scan entire repository for secrets
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          hide-progress: true

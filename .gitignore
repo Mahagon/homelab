@@ -4,6 +4,8 @@ butane/*.ign
 # Python
 tests/__pycache__/
 tests/.pytest_cache/
+**/__pycache__/
+*.pyc
 .venv/
 
 # OS
