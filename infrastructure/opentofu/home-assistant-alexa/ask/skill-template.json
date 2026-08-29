@@ -1,0 +1,43 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "isAvailableWorldwide": false,
+      "distributionCountries": [
+        "DE"
+      ],
+      "category": "SMART_HOME",
+      "testingInstructions": "Private Home Assistant Smart Home skill for the account owner.",
+      "locales": {
+        "de-DE": {
+          "name": "Mein Zuhause",
+          "summary": "Private Alexa-Anbindung für Home Assistant.",
+          "description": "Diese private Smart-Home-Skill verbindet Alexa mit der eigenen Home-Assistant-Instanz.",
+          "examplePhrases": [],
+          "keywords": [
+            "Smart Home",
+            "Home Assistant"
+          ],
+          "smallIconUri": "${SMALL_ICON_URI}",
+          "largeIconUri": "${LARGE_ICON_URI}"
+        }
+      }
+    },
+    "apis": {
+      "smartHome": {
+        "endpoint": {
+          "uri": "${LAMBDA_ARN}"
+        },
+        "protocolVersion": "3"
+      }
+    },
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false
+    }
+  }
+}
+
