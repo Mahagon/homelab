@@ -1,0 +1,5 @@
+compact: true
+quiet: true
+download-external-modules: false
+evaluate-variables: true
+
