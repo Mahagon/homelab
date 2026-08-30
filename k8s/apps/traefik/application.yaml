@@ -11,6 +11,8 @@ spec:
     repoURL: git@github.com:Mahagon/homelab.git
     targetRevision: main
     path: k8s/apps/traefik/manifests
+    plugin:
+      name: envsubst
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
