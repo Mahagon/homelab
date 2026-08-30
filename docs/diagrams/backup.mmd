@@ -1,0 +1,11 @@
+flowchart LR
+    Cron["homelab-backup CronJob - daily at 01:00"] --> PG["pg_dumpall - postgres:18-alpine"]
+    Cron --> R["restic/restic"]
+    PG -->|dump.sql in emptyDir| R
+
+    SSD["/var/lib/homelab - SSD PVCs"] -->|tag: pvcs-ssd| R
+    HDD["/var/mnt/data - HDD PVCs"] -->|tag: pvcs-hdd| R
+    USB["/var/mnt/backup/restic-repo - USB 4 TB"]
+
+    R -->|tag: postgresql| USB
+    R --> USB

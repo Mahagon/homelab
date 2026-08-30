@@ -4,40 +4,7 @@ Declarative home lab running on a GA-J1900N-D3V (8GB RAM, 256GB SSD, 4TB HDD).
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    Internet["Internet"] -->|HTTPS| Traefik
-    RemoteUsers["Remote users / Alexa"] -->|HTTPS| CloudflareTunnel["Cloudflare Tunnel"]
-    Git["Git repository"] -->|GitOps| ArgoCD
-    ExternalDNS -->|A records| Cloudflare["Cloudflare DNS"]
-    CertManager -->|DNS-01 challenge| Cloudflare
-
-    Hardware["GA-J1900N-D3V - 8 GB RAM"] --> FedoraCoreOS["Fedora CoreOS"]
-    FedoraCoreOS --> K3s["K3s cluster"]
-    K3s --> ArgoCD["Argo CD"]
-    K3s --> Traefik["Traefik ingress"]
-    K3s --> CertManager["cert-manager"]
-    K3s --> ExternalDNS["external-dns"]
-    K3s --> Cloudflared["cloudflared - 2 connectors"]
-    K3s --> Replicator["kubernetes-replicator"]
-    K3s --> VPA["Vertical Pod Autoscaler"]
-    K3s --> AppServices["Application services"]
-    AppServices --> HomeAssistant["Home Assistant"]
-
-    Traefik --> AppServices
-    ArgoCD -->|reconciles| AppServices
-    Replicator -->|syncs secrets| AppServices
-    VPA -->|adjusts resources| AppServices
-    Cloudflared -->|internal HTTP 8123| HomeAssistant
-
-    SSD["SSD 256 GB - OS, K3s state, fast PVs"]
-    HDD["HDD 4 TB - media, documents"]
-    USB["USB 4 TB - backups, optional"]
-
-    AppServices --> SSD
-    AppServices --> HDD
-    CloudflareTunnel -->|outbound tunnel| Cloudflared
-```
+[![Homelab architecture](docs/diagrams/architecture.svg)](docs/diagrams/architecture.mmd)
 
 ## Prerequisites
 
@@ -199,19 +166,7 @@ HOMELAB_DOMAIN=example.com pytest -v
 
 Daily incremental backups via restic at 01:00 (before the Zincati update window on Sunday 03:00–05:00).
 
-```mermaid
-flowchart LR
-    Cron["homelab-backup CronJob - daily at 01:00"] --> PG["pg_dumpall - postgres:18-alpine"]
-    Cron --> R["restic/restic"]
-    PG -->|dump.sql in emptyDir| R
-
-    SSD["/var/lib/homelab - SSD PVCs"] -->|tag: pvcs-ssd| R
-    HDD["/var/mnt/data - HDD PVCs"] -->|tag: pvcs-hdd| R
-    USB["/var/mnt/backup/restic-repo - USB 4 TB"]
-
-    R -->|tag: postgresql| USB
-    R --> USB
-```
+[![Backup data flow](docs/diagrams/backup.svg)](docs/diagrams/backup.mmd)
 
 **Retention policy:** 7 daily · 4 weekly · 6 monthly snapshots per tag.
 
