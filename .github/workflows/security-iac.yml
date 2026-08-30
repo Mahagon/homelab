@@ -190,12 +190,15 @@ jobs:
         run: |
           set -euo pipefail
           install -d -m 0777 "${RUNNER_TEMP}/mermaid"
-          docker run --rm \
-            --volume "${PWD}/README.md:/data/README.md:ro" \
-            --volume "${RUNNER_TEMP}/mermaid:/output" \
-            ghcr.io/mermaid-js/mermaid-cli/mermaid-cli:11.16.1@sha256:e7fc5c569c039c7d663e875ac0fe70828910f686b9bbee2d064f7e8a096d49f8 \
-            -i /data/README.md \
-            -o /output/rendered.md
+          for diagram in docs/diagrams/*.mmd; do
+            output="${RUNNER_TEMP}/mermaid/$(basename "${diagram%.mmd}").svg"
+            docker run --rm \
+              --volume "${PWD}/docs/diagrams:/data:ro" \
+              --volume "${RUNNER_TEMP}/mermaid:/output" \
+              ghcr.io/mermaid-js/mermaid-cli/mermaid-cli:11.16.1@sha256:e7fc5c569c039c7d663e875ac0fe70828910f686b9bbee2d064f7e8a096d49f8 \
+              -i "/data/$(basename "$diagram")" \
+              -o "/output/$(basename "$output")"
+          done
 
       - name: Validate Kubernetes schemas
         run: >-

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="360" viewBox="0 0 1100 360" role="img" aria-labelledby="title desc">
+  <title id="title">Backup data flow</title>
+  <desc id="desc">The daily backup CronJob sends database dumps and persistent volume data through restic to USB storage.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .box { fill:#f8fafc; stroke:#475569; stroke-width:2 }
+      .source { fill:#eff6ff; stroke:#2563eb; stroke-width:2 }
+      .dest { fill:#f0fdf4; stroke:#16a34a; stroke-width:2 }
+      .line { fill:none; stroke:#64748b; stroke-width:2; marker-end:url(#arrow) }
+      .label { font:600 15px system-ui, sans-serif; fill:#0f172a; text-anchor:middle }
+      .small { font:13px system-ui, sans-serif; fill:#334155; text-anchor:middle }
+      .edge { font:12px system-ui, sans-serif; fill:#475569; text-anchor:middle }
+    </style>
+  </defs>
+
+  <rect class="box" x="35" y="35" width="240" height="66" rx="10"/>
+  <text class="label" x="155" y="62">homelab-backup CronJob</text>
+  <text class="small" x="155" y="84">daily at 01:00</text>
+  <rect class="source" x="350" y="35" width="220" height="66" rx="10"/>
+  <text class="label" x="460" y="62">pg_dumpall</text>
+  <text class="small" x="460" y="84">postgres:18-alpine</text>
+  <rect class="box" x="680" y="140" width="180" height="70" rx="10"/>
+  <text class="label" x="770" y="170">restic</text>
+  <text class="small" x="770" y="192">encrypted snapshots</text>
+  <rect class="dest" x="915" y="140" width="160" height="70" rx="10"/>
+  <text class="label" x="995" y="168">USB 4 TB</text>
+  <text class="small" x="995" y="190">restic repository</text>
+
+  <rect class="source" x="95" y="245" width="240" height="66" rx="10"/>
+  <text class="label" x="215" y="272">SSD PVCs</text>
+  <text class="small" x="215" y="294">/var/lib/homelab</text>
+  <rect class="source" x="400" y="245" width="240" height="66" rx="10"/>
+  <text class="label" x="520" y="272">HDD PVCs</text>
+  <text class="small" x="520" y="294">/var/mnt/data</text>
+
+  <path class="line" d="M275 68 H350"/>
+  <path class="line" d="M275 82 C450 115, 570 150, 680 168"/>
+  <path class="line" d="M570 68 C640 75, 680 105, 720 140"/>
+  <text class="edge" x="620" y="96">dump.sql</text>
+  <path class="line" d="M335 278 C510 278, 590 225, 690 190"/>
+  <text class="edge" x="515" y="228">tag: pvcs-ssd</text>
+  <path class="line" d="M640 278 C700 265, 735 235, 755 210"/>
+  <text class="edge" x="712" y="238">tag: pvcs-hdd</text>
+  <path class="line" d="M860 175 H915"/>
+</svg>

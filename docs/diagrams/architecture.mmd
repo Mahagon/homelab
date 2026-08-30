@@ -1,0 +1,32 @@
+flowchart TD
+    Internet["Internet"] -->|HTTPS| Traefik
+    RemoteUsers["Remote users / Alexa"] -->|HTTPS| CloudflareTunnel["Cloudflare Tunnel"]
+    Git["Git repository"] -->|GitOps| ArgoCD
+    ExternalDNS -->|A records| Cloudflare["Cloudflare DNS"]
+    CertManager -->|DNS-01 challenge| Cloudflare
+
+    Hardware["GA-J1900N-D3V - 8 GB RAM"] --> FedoraCoreOS["Fedora CoreOS"]
+    FedoraCoreOS --> K3s["K3s cluster"]
+    K3s --> ArgoCD["Argo CD"]
+    K3s --> Traefik["Traefik ingress"]
+    K3s --> CertManager["cert-manager"]
+    K3s --> ExternalDNS["external-dns"]
+    K3s --> Cloudflared["cloudflared - 2 connectors"]
+    K3s --> Replicator["kubernetes-replicator"]
+    K3s --> VPA["Vertical Pod Autoscaler"]
+    K3s --> AppServices["Application services"]
+    AppServices --> HomeAssistant["Home Assistant"]
+
+    Traefik --> AppServices
+    ArgoCD -->|reconciles| AppServices
+    Replicator -->|syncs secrets| AppServices
+    VPA -->|adjusts resources| AppServices
+    Cloudflared -->|internal HTTP 8123| HomeAssistant
+
+    SSD["SSD 256 GB - OS, K3s state, fast PVs"]
+    HDD["HDD 4 TB - media, documents"]
+    USB["USB 4 TB - backups, optional"]
+
+    AppServices --> SSD
+    AppServices --> HDD
+    CloudflareTunnel -->|outbound tunnel| Cloudflared
