@@ -86,6 +86,14 @@ data:
           friendly_name: Alle Rollläden
           device_class: shutter
 
+    light:
+      - platform: group
+        name: Wohnraum Licht
+        entities:
+          - light.licht
+          - light.licht_2
+          - light.licht_3
+
     http:
       ip_ban_enabled: true
       login_attempts_threshold: 5
@@ -99,6 +107,7 @@ data:
             - light.licht_2
             - light.licht_3
             - light.licht_4
+            - light.wohnraum_licht
             - cover.rolladen
             - cover.rolladen_2
             - cover.rolladen_3
@@ -121,6 +130,9 @@ data:
             display_categories: LIGHT
           light.licht_4:
             name: Büro Licht
+            display_categories: LIGHT
+          light.wohnraum_licht:
+            name: Wohnraum Licht
             display_categories: LIGHT
           cover.rolladen:
             name: Küche Rollladen
