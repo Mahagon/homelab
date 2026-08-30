@@ -18,9 +18,3 @@ CVE-2026-56858
 CVE-2026-56859
 CVE-2026-56860
 CVE-2026-56862
-
-# Temporary Python base-image exception (review 2026-09-15): the proxy uses
-# only Python's standard library; these packages are bundled in the official
-# python:3.14-alpine image and are not imported by the proxy.
-GHSA-6v7p-g79w-8964
-CVE-2025-47273

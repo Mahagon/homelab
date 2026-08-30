@@ -1,7 +1,9 @@
-# Legacy AWS variant: Home Assistant remote access and Alexa
+# AWS Lambda architecture: Home Assistant remote access and Alexa
 
-> For the zero-AWS deployment, use [home-assistant-alexa-proxy.md](home-assistant-alexa-proxy.md).
-> This document remains as reference for the optional AWS Lambda architecture.
+This is the active architecture. Alexa Smart Home requires the Lambda endpoint;
+the Lambda forwards directives through the protected Cloudflare/K3s proxy.
+The temporary standalone Cloudflare root must be migrated into `main` before
+the first AWS apply.
 
 This runbook publishes `homeassistant.example.invalid` through an outbound-only
 Cloudflare Tunnel and connects a private German Alexa Smart Home skill through
@@ -132,13 +134,17 @@ The GitHub role uses OIDC and accepts only the exact subject
 `repo:Mahagon/homelab:environment:aws-production`. It cannot be assumed by a
 different repository or a normal branch workflow.
 
-## 5. Create the tunnel without publishing DNS
+## 5. Import the existing tunnel and deploy AWS resources
 
 For the first deployment, dispatch **Apply Home Assistant Alexa infrastructure**
 from `main` with `publish_dns` disabled. This creates the tunnel, Lambda, IAM,
 logging, and budget but leaves the current DNS record untouched.
 
-For a local first apply instead:
+The live tunnel and DNS record were created by the temporary `cloudflare` root.
+Import them into the remote-backed `main` state before applying so OpenTofu
+does not create a duplicate tunnel.
+
+For a local apply:
 
 ```powershell
 Set-Location infrastructure/opentofu/home-assistant-alexa/main
@@ -146,10 +152,16 @@ $env:AWS_PROFILE = "homelab-admin"
 $env:CLOUDFLARE_API_TOKEN = Read-Host "Cloudflare OpenTofu token"
 
 tofu init -backend-config="bucket=<TOFU_STATE_BUCKET>"
+tofu import cloudflare_zero_trust_tunnel_cloudflared.home_assistant `
+  "<ACCOUNT_ID>/<TUNNEL_ID>"
+tofu import cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant `
+  "<ACCOUNT_ID>/<TUNNEL_ID>"
+tofu import 'cloudflare_dns_record.home_assistant[0]' `
+  "<ZONE_ID>/<DNS_RECORD_ID>"
 tofu plan -var="cloudflare_account_id=<ACCOUNT_ID>" `
   -var="cloudflare_zone_id=<ZONE_ID>" `
   -var="budget_email=<EMAIL>" `
-  -var="publish_dns=false" -out first.tfplan
+  -var="publish_dns=true" -var="alexa_skill_id=" -out first.tfplan
 tofu apply first.tfplan
 ```
 
@@ -185,7 +197,7 @@ kubectl rollout status deployment/cloudflared --namespace cloudflared
 kubectl get pods --namespace cloudflared
 ```
 
-Both replicas must be Ready. In Cloudflare, the `homeassistant-k3s` tunnel must
+Both replicas must be Ready. In Cloudflare, the `home-assistant-k3s` tunnel must
 show Healthy before changing DNS.
 
 The NetworkPolicy allows only DNS, Cloudflare TCP/UDP 7844, and Home Assistant

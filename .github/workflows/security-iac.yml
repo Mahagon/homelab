@@ -9,7 +9,6 @@ on:
       - "butane/**"
       - "infrastructure/**"
       - "k8s/apps/cloudflared/**"
-      - "k8s/apps/alexa-proxy/**"
       - "k8s/apps/external-dns/**"
       - "k8s/apps/home-assistant/**"
   push:
@@ -22,7 +21,6 @@ on:
       - "butane/**"
       - "infrastructure/**"
       - "k8s/apps/cloudflared/**"
-      - "k8s/apps/alexa-proxy/**"
       - "k8s/apps/external-dns/**"
       - "k8s/apps/home-assistant/**"
   workflow_dispatch:
@@ -105,11 +103,6 @@ jobs:
           --directory k8s/apps/cloudflared/manifests
           --framework kubernetes
 
-      - name: Check Alexa proxy workload security
-        run: >-
-          checkov
-          --directory k8s/apps/alexa-proxy/manifests
-          --framework kubernetes
 
   kubernetes:
     name: Kubernetes and secret scanning
@@ -164,15 +157,6 @@ jobs:
           exit-code: "1"
           hide-progress: true
 
-      - name: Scan Alexa proxy manifests
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.74.0
-          scan-type: config
-          scan-ref: k8s/apps/alexa-proxy/manifests
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          hide-progress: true
 
       - name: Scan cloudflared image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -185,16 +169,6 @@ jobs:
           exit-code: "1"
           hide-progress: true
 
-      - name: Scan Alexa proxy image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.74.0
-          scan-type: image
-          image-ref: python:3.14-alpine@sha256:05b2b8b732ecd268fee8727a369f936f022d1321b59befd13c30ede22769dcdc
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          hide-progress: true
 
       - name: Scan entire repository for secrets
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

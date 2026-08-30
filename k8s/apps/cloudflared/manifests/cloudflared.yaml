@@ -172,13 +172,6 @@ spec:
         - protocol: TCP
           port: 8123
     - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: alexa-proxy
-      ports:
-        - protocol: TCP
-          port: 8080
-    - to:
         - ipBlock:
             # Cloudflare publishes changing edge addresses. Limit this broad
             # destination by the dedicated tunnel port and protocols.

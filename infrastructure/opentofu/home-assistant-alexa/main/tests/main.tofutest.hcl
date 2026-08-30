@@ -111,7 +111,7 @@ run "skill_and_dns_are_restricted" {
   }
 
   assert {
-    condition     = cloudflare_dns_record.home_assistant[0].proxied && cloudflare_dns_record.home_assistant[0].type == "CNAME"
+    condition     = cloudflare_dns_record.home_assistant[0].proxied && cloudflare_dns_record.home_assistant[0].type == "CNAME" && cloudflare_dns_record.home_assistant[0].name == "homeassistant"
     error_message = "Home Assistant DNS must be a proxied CNAME."
   }
 }

@@ -1,6 +1,6 @@
 locals {
   function_name = "home-assistant-alexa"
-  tunnel_name   = "homeassistant-k3s"
+  tunnel_name   = "home-assistant-k3s"
   common_tags = merge({
     ManagedBy   = "OpenTofu"
     Project     = "home-assistant-alexa"
@@ -175,7 +175,7 @@ resource "cloudflare_dns_record" "home_assistant" {
   count = var.publish_dns ? 1 : 0
 
   zone_id = var.cloudflare_zone_id
-  name    = var.home_assistant_hostname
+  name    = "homeassistant"
   content = "${cloudflare_zero_trust_tunnel_cloudflared.home_assistant.id}.cfargotunnel.com"
   type    = "CNAME"
   proxied = true

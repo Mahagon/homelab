@@ -22,14 +22,6 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "home_assistant" {
     ingress = [
       {
         hostname = var.hostname
-        path     = "^/api/alexa/smart_home$"
-        service  = "http://alexa-proxy.alexa-proxy.svc.cluster.local:8080"
-        origin_request = {
-          http_host_header = var.hostname
-        }
-      },
-      {
-        hostname = var.hostname
         service  = "http://home-assistant.home-assistant.svc.cluster.local:8123"
         origin_request = {
           http_host_header = var.hostname
@@ -54,8 +46,8 @@ resource "cloudflare_dns_record" "home_assistant" {
 
 check "alexa_proxy_route" {
   assert {
-    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[0].service == "http://alexa-proxy.alexa-proxy.svc.cluster.local:8080"
-    error_message = "Alexa directives must route to the in-cluster proxy."
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[0].service == "http://home-assistant.home-assistant.svc.cluster.local:8123"
+    error_message = "All tunnel traffic must route to the internal Home Assistant service."
   }
 }
 

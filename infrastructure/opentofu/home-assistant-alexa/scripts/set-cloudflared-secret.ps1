@@ -1,6 +1,6 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string]$TofuDirectory = (Join-Path $PSScriptRoot "..\cloudflare"),
+    [string]$TofuDirectory = (Join-Path $PSScriptRoot "..\main"),
     [string]$KubeContext
 )
 
