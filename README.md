@@ -5,49 +5,38 @@ Declarative home lab running on a GA-J1900N-D3V (8GB RAM, 256GB SSD, 4TB HDD).
 ## Architecture
 
 ```mermaid
-graph TD
-    Internet -->|HTTPS| Traefik
+flowchart TD
+    Internet["Internet"] -->|HTTPS| Traefik
     RemoteUsers["Remote users / Alexa"] -->|HTTPS| CloudflareTunnel["Cloudflare Tunnel"]
-    Git["Git repo (github.com/Mahagon/homelab)"] -->|GitOps| ArgoCD
+    Git["Git repository"] -->|GitOps| ArgoCD
     ExternalDNS -->|A records| Cloudflare["Cloudflare DNS"]
     CertManager -->|DNS-01 challenge| Cloudflare
 
-    subgraph hw["GA-J1900N-D3V - 8GB RAM"]
-        subgraph fcos["Fedora CoreOS"]
-            subgraph cluster["K3s"]
-                ArgoCD
-                Traefik["Traefik (ingress)"]
-                CertManager["cert-manager"]
-                ExternalDNS["external-dns"]
-                Cloudflared["cloudflared (2 connectors)"]
-                Replicator["kubernetes-replicator"]
-                VPA["Vertical Pod Autoscaler"]
+    Hardware["GA-J1900N-D3V - 8 GB RAM"] --> FedoraCoreOS["Fedora CoreOS"]
+    FedoraCoreOS --> K3s["K3s cluster"]
+    K3s --> ArgoCD["Argo CD"]
+    K3s --> Traefik["Traefik ingress"]
+    K3s --> CertManager["cert-manager"]
+    K3s --> ExternalDNS["external-dns"]
+    K3s --> Cloudflared["cloudflared - 2 connectors"]
+    K3s --> Replicator["kubernetes-replicator"]
+    K3s --> VPA["Vertical Pod Autoscaler"]
+    K3s --> AppServices["Application services"]
+    AppServices --> HomeAssistant["Home Assistant"]
 
-                subgraph apps["per-namespace apps"]
-                    PostgreSQL
-                    Redis
-                    HomeAssistant["Home Assistant"]
-                    Jellyfin
-                    Paperless["Paperless-ngx"]
-                    Vaultwarden
-                end
+    Traefik --> AppServices
+    ArgoCD -->|reconciles| AppServices
+    Replicator -->|syncs secrets| AppServices
+    VPA -->|adjusts resources| AppServices
+    Cloudflared -->|internal HTTP 8123| HomeAssistant
 
-                Traefik --> apps
-                ArgoCD -->|reconciles| apps
-                Replicator -->|syncs secrets| apps
-                VPA -->|adjusts resources| apps
-                Cloudflared -->|internal HTTP 8123| HomeAssistant
-            end
+    SSD["SSD 256 GB - OS, K3s state, fast PVs"]
+    HDD["HDD 4 TB - media, documents"]
+    USB["USB 4 TB - backups, optional"]
 
-            SSD["SSD 256GB - OS, K3s state, fast PVs"]
-            HDD["HDD 4TB - media, documents"]
-            USB["USB 4TB - backups (optional)"]
-        end
-    end
-
-    apps --> SSD
-    apps --> HDD
-    CloudflareTunnel -->|outbound tunnel connection| Cloudflared
+    AppServices --> SSD
+    AppServices --> HDD
+    CloudflareTunnel -->|outbound tunnel| Cloudflared
 ```
 
 ## Prerequisites
@@ -212,23 +201,14 @@ Daily incremental backups via restic at 01:00 (before the Zincati update window 
 
 ```mermaid
 flowchart LR
-    subgraph k8s["K3s (CronJob: homelab-backup, 01:00 daily)"]
-        PG["init: pg_dumpall\npostgres:18-alpine"]
-        R["restic/restic"]
-        PG -->|dump.sql\nemptyDir| R
-    end
+    Cron["homelab-backup CronJob - daily at 01:00"] --> PG["pg_dumpall - postgres:18-alpine"]
+    Cron --> R["restic/restic"]
+    PG -->|dump.sql in emptyDir| R
 
-    subgraph src["Source data (read-only hostPath)"]
-        SSD["/var/lib/homelab\nSSD PVCs — PostgreSQL, Redis,\nconfig volumes"]
-        HDD["/var/mnt/data\nHDD PVCs — Jellyfin media,\nPaperless media/consume"]
-    end
+    SSD["/var/lib/homelab - SSD PVCs"] -->|tag: pvcs-ssd| R
+    HDD["/var/mnt/data - HDD PVCs"] -->|tag: pvcs-hdd| R
+    USB["/var/mnt/backup/restic-repo - USB 4 TB"]
 
-    subgraph dst["Destination"]
-        USB["/var/mnt/backup/restic-repo\nUSB 4TB"]
-    end
-
-    SSD -->|tag: pvcs-ssd| R
-    HDD -->|tag: pvcs-hdd| R
     R -->|tag: postgresql| USB
     R --> USB
 ```

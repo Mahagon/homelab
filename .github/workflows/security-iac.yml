@@ -167,6 +167,36 @@ jobs:
             k8s/apps/home-assistant/manifests/home-assistant.yaml \
             > .rendered/home-assistant.yaml
 
+      - name: Verify templated applications use envsubst
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -rlF '${DOMAIN}' k8s/apps/*/manifests/*.yaml |
+            while read -r manifest; do
+              dirname "$(dirname "$manifest")"
+            done |
+            sort -u |
+            while read -r app_dir; do
+              application="$app_dir/application.yaml"
+              if ! grep -A3 -F "path: $app_dir/manifests" "$application" |
+                grep -qF "name: envsubst"; then
+                echo "::error file=$application::Manifests use ${DOMAIN}, but this Application does not select the envsubst plugin."
+                exit 1
+              fi
+            done
+
+      - name: Validate README Mermaid diagrams
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0777 "${RUNNER_TEMP}/mermaid"
+          docker run --rm \
+            --volume "${PWD}/README.md:/data/README.md:ro" \
+            --volume "${RUNNER_TEMP}/mermaid:/output" \
+            ghcr.io/mermaid-js/mermaid-cli/mermaid-cli:11.16.1@sha256:e7fc5c569c039c7d663e875ac0fe70828910f686b9bbee2d064f7e8a096d49f8 \
+            -i /data/README.md \
+            -o /output/rendered.md
+
       - name: Validate Kubernetes schemas
         run: >-
           docker run --rm
