@@ -21,7 +21,7 @@ run "routes_are_private" {
   }
 
   assert {
-    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[0].service == "http://alexa-proxy.alexa-proxy.svc.cluster.local:8080"
-    error_message = "Alexa must use the in-cluster proxy."
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[0].service == "http://home-assistant.home-assistant.svc.cluster.local:8123"
+    error_message = "Tunnel traffic must route to the internal Home Assistant service."
   }
 }

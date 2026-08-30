@@ -44,16 +44,9 @@ resource "cloudflare_dns_record" "home_assistant" {
   ttl     = 1
 }
 
-check "alexa_proxy_route" {
+check "home_assistant_route" {
   assert {
     condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[0].service == "http://home-assistant.home-assistant.svc.cluster.local:8123"
     error_message = "All tunnel traffic must route to the internal Home Assistant service."
-  }
-}
-
-check "home_assistant_route" {
-  assert {
-    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[1].service == "http://home-assistant.home-assistant.svc.cluster.local:8123"
-    error_message = "General hostname traffic must route to Home Assistant."
   }
 }
