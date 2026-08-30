@@ -75,9 +75,8 @@ resource "aws_lambda_function" "alexa" {
   filename         = data.archive_file.lambda.output_path
   source_code_hash = data.archive_file.lambda.output_base64sha256
 
-  memory_size                    = 256
-  timeout                        = 8
-  reserved_concurrent_executions = 2
+  memory_size = 256
+  timeout     = 8
 
   environment {
     variables = {

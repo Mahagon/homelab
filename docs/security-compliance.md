@@ -73,7 +73,7 @@ ignores that make the whole repository appear compliant.
 | Bypass of public authentication | Home Assistant authentication/MFA remains mandatory; unauthenticated `/api/` returns 401. |
 | Stolen Alexa OAuth token | Lambda neither stores nor logs tokens and forwards them only to the fixed HTTPS Home Assistant endpoint. |
 | Arbitrary Lambda invocation | Resource permission requires the Alexa Smart Home service principal and exact Skill ID. |
-| Lambda cost amplification | Eight-second timeout, 256 MB memory, and reserved concurrency of two. |
+| Lambda cost amplification | Eight-second timeout, 256 MB memory, and the AWS account-level concurrency quota. |
 | Tunnel compromise | Connector token is a sensitive state output and Kubernetes Secret; the pod cannot modify remote routing. Rotate after suspected disclosure. |
 | DNS takeover or drift | Dedicated Cloudflare API token, OpenTofu-managed proxied CNAME, ExternalDNS exclusion, and post-apply empty plan. |
 | CI credential theft | Short-lived GitHub OIDC credentials, exact trust subject, read-only default workflow permissions, and pinned actions. |
@@ -109,4 +109,3 @@ Every scanner suppression must identify one rule and resource and include:
 CI fails all other Checkov findings and HIGH/CRITICAL Trivy findings. Review the
 baseline whenever the AWS CIS, K3s CIS, provider, Lambda runtime, or cloudflared
 major version changes.
-

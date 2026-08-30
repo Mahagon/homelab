@@ -62,7 +62,7 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = aws_lambda_function.alexa.memory_size == 256 && aws_lambda_function.alexa.timeout == 8 && aws_lambda_function.alexa.reserved_concurrent_executions == 2
+    condition     = aws_lambda_function.alexa.memory_size == 256 && aws_lambda_function.alexa.timeout == 8
     error_message = "Lambda resource and cost limits changed unexpectedly."
   }
 
