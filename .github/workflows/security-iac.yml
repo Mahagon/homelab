@@ -337,11 +337,37 @@ jobs:
         shell: bash
         run: |
           set +e
-          tofu plan -input=false -lock-timeout=5m -no-color -detailed-exitcode
+          tofu plan \
+            -input=false \
+            -lock-timeout=5m \
+            -no-color \
+            -out=post-apply.tfplan \
+            -detailed-exitcode
           exit_code=$?
           set -e
-          if [[ ${exit_code} -ne 0 ]]; then
-            echo "Expected an empty post-apply plan, got exit code ${exit_code}." >&2
+
+          if [[ ${exit_code} -eq 0 ]]; then
+            exit 0
+          fi
+          if [[ ${exit_code} -eq 1 ]]; then
+            exit 1
+          fi
+
+          dnssec_pending_only="$(
+            tofu show -json post-apply.tfplan |
+              jq -r '
+                [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes |
+                ($changes | length == 1) and
+                ($changes[0].address == "cloudflare_zone_dnssec.zone") and
+                ($changes[0].change.actions == ["update"]) and
+                ($changes[0].change.before.status == "pending") and
+                ($changes[0].change.after.status == "active")
+              '
+          )"
+          if [[ "${dnssec_pending_only}" == "true" ]]; then
+            echo "::warning::Cloudflare DNSSEC is pending registrar DS publication; no other post-apply drift exists."
+          else
+            echo "Expected an empty post-apply plan; unexpected drift remains." >&2
             exit 1
           fi
 
@@ -349,4 +375,4 @@ jobs:
         if: always()
         working-directory: infrastructure/opentofu/home-assistant-alexa/main
         shell: bash
-        run: rm -f deployment.tfplan
+        run: rm -f deployment.tfplan post-apply.tfplan

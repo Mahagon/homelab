@@ -159,8 +159,8 @@ resource "aws_iam_role" "github_deployment" {
 }
 
 data "aws_iam_policy_document" "github_deployment" {
-  #checkov:skip=CKV_AWS_111:The AWS Budgets API and logs:DescribeLogGroups do not support resource-level authorization; wildcard statements are limited to their required read/write actions. Review 2027-08-01.
-  #checkov:skip=CKV_AWS_356:The AWS Budgets API and logs:DescribeLogGroups do not support resource-level authorization; wildcard statements are limited to their required read/write actions. Review 2027-08-01.
+  #checkov:skip=CKV_AWS_111:logs:DescribeLogGroups does not support resource-level authorization; its wildcard statement contains only that required read action. Review 2027-08-01.
+  #checkov:skip=CKV_AWS_356:logs:DescribeLogGroups does not support resource-level authorization; its wildcard statement contains only that required read action. Review 2027-08-01.
   statement {
     sid       = "StateBucketMetadata"
     effect    = "Allow"
@@ -260,10 +260,11 @@ data "aws_iam_policy_document" "github_deployment" {
     sid    = "CostBudget"
     effect = "Allow"
     actions = [
+      "budgets:ListTagsForResource",
       "budgets:ModifyBudget",
       "budgets:ViewBudget"
     ]
-    resources = ["*"]
+    resources = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/home-assistant-alexa-cost-guard"]
   }
 }
 

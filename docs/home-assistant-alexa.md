@@ -415,6 +415,10 @@ Use either the full DS record or its separate key-tag, algorithm, digest-type,
 and digest fields at the registrar for `<your-domain>`. Wait for the
 delegation to propagate, then verify it through an external validating resolver:
 
+Until the registrar publishes the DS record, Cloudflare reports DNSSEC as
+`pending`. The deployment workflow accepts only this exact pending-to-active
+post-apply difference and continues to fail on every other kind of drift.
+
 ```powershell
 Resolve-DnsName -Type DS <your-domain> -Server 1.1.1.1
 Resolve-DnsName homeassistant.<your-domain> -DnssecOk -Server 1.1.1.1

@@ -70,7 +70,7 @@ run "secure_bootstrap_contract" {
   }
 
   assert {
-    condition     = contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "logs:DescribeLogGroups") && contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:ViewBudget")
+    condition     = contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "logs:DescribeLogGroups") && contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:ViewBudget") && contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:ListTagsForResource")
     error_message = "The deployment role must be able to refresh the managed log group and budget."
   }
 
