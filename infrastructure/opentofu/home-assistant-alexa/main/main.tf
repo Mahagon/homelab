@@ -60,7 +60,8 @@ resource "aws_cloudwatch_log_group" "lambda" {
 }
 
 resource "aws_lambda_function" "alexa" {
-  #checkov:skip=CKV_AWS_50:X-Ray adds cost and is not needed for this low-volume synchronous proxy. Review 2027-08-01.
+  #checkov:skip=CKV_AWS_115:The new AWS account has a 10-concurrency unreserved floor, so any positive reservation currently fails deployment. The Alexa resource permission, 8-second timeout, and low-volume synchronous workload provide the practical limit until the account quota is raised. Review after a quota increase.
+  #checkov:skip=CKV_AWS_50:X-Ray adds cost and is not needed for this low-volume synchronous bridge. Review 2027-08-01.
   #checkov:skip=CKV_AWS_116:DLQs apply to asynchronous invocation; Alexa invokes this function synchronously. Review 2027-08-01.
   #checkov:skip=CKV_AWS_117:A VPC would add complexity and can impair public Home Assistant connectivity; the function has no private AWS dependencies. Review 2027-08-01.
   #checkov:skip=CKV_AWS_173:The environment contains no secret; BASE_URL and LOG_LEVEL are public configuration. Review 2027-08-01.

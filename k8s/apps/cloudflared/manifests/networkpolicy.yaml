@@ -1,0 +1,85 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: cloudflared
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudflared-dns-egress
+  namespace: cloudflared
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudflared-home-assistant-egress
+  namespace: cloudflared
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: home-assistant
+          podSelector:
+            matchLabels:
+              app: home-assistant
+        - ipBlock:
+            # Home Assistant currently uses hostNetwork, so the effective
+            # destination may be the node address rather than a pod address.
+            cidr: 192.168.178.10/32
+      ports:
+        - protocol: TCP
+          port: 8123
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudflared-tunnel-egress
+  namespace: cloudflared
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            # Cloudflare publishes changing edge addresses. Restrict the
+            # connector to the dedicated Tunnel port instead of stale IPs.
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: UDP
+          port: 7844
+        - protocol: TCP
+          port: 7844

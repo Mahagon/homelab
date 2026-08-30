@@ -113,11 +113,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .rendered
-          sed \
-            -e 's/${DOMAIN}/example.invalid/g' \
-            -e 's/${EMAIL}/security@example.com/g' \
-            k8s/apps/cloudflared/manifests/cloudflared.yaml \
-            > .rendered/cloudflared.yaml
+          for manifest in k8s/apps/cloudflared/manifests/*.yaml; do
+            sed \
+              -e 's/${DOMAIN}/example.invalid/g' \
+              -e 's/${EMAIL}/security@example.com/g' \
+              "$manifest" >> .rendered/cloudflared.yaml
+            printf '\n---\n' >> .rendered/cloudflared.yaml
+          done
           sed \
             -e 's/${DOMAIN}/example.invalid/g' \
             -e 's/${EMAIL}/security@example.com/g' \

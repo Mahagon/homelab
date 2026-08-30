@@ -45,7 +45,7 @@ Because the deferred controls are material, documentation and CI must say
 | Root filesystem | Implemented | Read-only with a size-limited `/tmp` `emptyDir`. |
 | Host namespaces | Implemented | No host network, PID, or IPC access. |
 | Resource governance | Implemented | CPU/memory requests and limits, fixed replica count, and no autoscaler. |
-| Network segmentation | Implemented | Default deny; explicit DNS, tunnel 7844, and Home Assistant 8123 egress only. |
+| Network segmentation | Configured, pending node enablement | Cloudflared namespace default-deny with separate DNS, tunnel 7844, and Home Assistant 8123 egress policies; K3s must run without `--disable-network-policy true`. |
 | Secret handling | Partial | Token is a read-only Secret mount and never stored in Git; K3s secrets-at-rest encryption is outside this scope. |
 | Image provenance | Partial | Immutable digest and Renovate tracking; no admission-time signature verification. |
 | Availability | Implemented | Two connectors, readiness/liveness probes, rolling update, and PDB. Both replicas share one physical node. |
@@ -74,7 +74,7 @@ ignores that make the whole repository appear compliant.
 | Stolen Alexa OAuth token | Lambda neither stores nor logs tokens and forwards them only to the fixed HTTPS Home Assistant endpoint. |
 | Arbitrary Lambda invocation | Resource permission requires the Alexa Smart Home service principal and exact Skill ID. |
 | Lambda cost amplification | Eight-second timeout, 256 MB memory, and the AWS account-level concurrency quota. |
-| Tunnel compromise | Connector token is a sensitive state output and Kubernetes Secret; the pod cannot modify remote routing. Rotate after suspected disclosure. |
+| Tunnel compromise | Connector token is a sensitive state output and Kubernetes Secret; the pod cannot modify remote routing. Rotate after suspected disclosure. Connector egress is restricted to TCP/UDP 7844. |
 | DNS takeover or drift | Dedicated Cloudflare API token, OpenTofu-managed proxied CNAME, ExternalDNS exclusion, and post-apply empty plan. |
 | CI credential theft | Short-lived GitHub OIDC credentials, exact trust subject, read-only default workflow permissions, and pinned actions. |
 | Accidental broad Alexa exposure | Explicit 14-entity allowlist; no domain/glob includes and no proactive-event credentials. |

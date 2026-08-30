@@ -1,9 +1,9 @@
 # AWS Lambda architecture: Home Assistant remote access and Alexa
 
 This is the active architecture. Alexa Smart Home requires the Lambda endpoint;
-the Lambda forwards directives through the protected Cloudflare/K3s proxy.
-The temporary standalone Cloudflare root must be migrated into `main` before
-the first AWS apply.
+the Lambda forwards directives through the protected outbound-only Cloudflare
+Tunnel. `infrastructure/opentofu/home-assistant-alexa/main` is the single
+OpenTofu root for this stack.
 
 This runbook publishes `homeassistant.example.invalid` through an outbound-only
 Cloudflare Tunnel and connects a private German Alexa Smart Home skill through
@@ -172,6 +172,23 @@ Remove the environment variable after the apply:
 Remove-Item Env:CLOUDFLARE_API_TOKEN
 ```
 
+Once the consolidated `main` state has been applied successfully, retire the
+old standalone state without deleting any live Cloudflare resources:
+
+```powershell
+tofu -chdir=infrastructure/opentofu/home-assistant-alexa/main state list
+tofu -chdir=infrastructure/opentofu/home-assistant-alexa/cloudflare state list
+tofu -chdir=infrastructure/opentofu/home-assistant-alexa/cloudflare state rm `
+  'cloudflare_dns_record.home_assistant[0]' `
+  cloudflare_zero_trust_tunnel_cloudflared.home_assistant `
+  cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant `
+  data.cloudflare_zero_trust_tunnel_cloudflared_token.home_assistant
+```
+
+The `state rm` operation only forgets the old state objects; it does not call
+the Cloudflare API to destroy the tunnel or DNS record. Verify a no-change plan
+from `main` before removing any ignored local `.terraform` or state artifacts.
+
 ## 6. Enable K3s network policy and deploy the connectors
 
 `butane/config.bu` enables the controller for future provisioning. On the
@@ -185,6 +202,18 @@ sudo vi /etc/rancher/k3s/config.yaml
 sudo systemctl restart k3s
 sudo systemctl is-active k3s
 ```
+
+Verify the running node no longer has the disabling flag before relying on the
+policies:
+
+```powershell
+kubectl get node homelab -o jsonpath="{.metadata.annotations.k3s\.io/node-args}{'\n'}"
+kubectl get networkpolicy -n cloudflared
+```
+
+The node arguments must not contain `--disable-network-policy true`. Existing
+clusters created before this setting was changed may continue reporting that
+flag until K3s is restarted with the corrected configuration.
 
 After Argo CD has created the `cloudflared` namespace, transfer the connector
 token without writing it to disk:
@@ -200,9 +229,15 @@ kubectl get pods --namespace cloudflared
 Both replicas must be Ready. In Cloudflare, the `home-assistant-k3s` tunnel must
 show Healthy before changing DNS.
 
-The NetworkPolicy allows only DNS, Cloudflare TCP/UDP 7844, and Home Assistant
+The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, and Home Assistant
 TCP 8123. If the Home Assistant node address changes, update the `/32` rule in
-the manifest before moving the node.
+`k8s/apps/cloudflared/manifests/networkpolicy.yaml` before moving the node.
+
+The UniFi gateway must not have a WAN port-forward or DMZ rule for Home
+Assistant. The connector is outbound-only; no inbound firewall exception is
+required. If UniFi egress rules are restricted, allow the K3s node to reach
+Cloudflare on TCP/UDP 7844. Cloudflare edge IPs are intentionally not pinned
+because they change over time.
 
 ## 7. Move the existing DNS record under OpenTofu
 

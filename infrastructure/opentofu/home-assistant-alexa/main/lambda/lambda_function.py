@@ -1,4 +1,4 @@
-"""Minimal Alexa Smart Home v3 proxy for Home Assistant.
+"""Minimal Alexa Smart Home v3 bridge for Home Assistant.
 
 The function intentionally has no third-party dependencies and never logs the
 incoming directive because it contains the Home Assistant OAuth access token.
@@ -198,4 +198,3 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
         },
     )
     return response
-
