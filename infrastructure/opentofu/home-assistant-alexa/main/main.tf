@@ -29,7 +29,7 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 
 resource "aws_iam_role" "lambda" {
   name                 = "home-assistant-alexa-lambda"
-  description          = "Minimal execution role for the Home Assistant Alexa proxy."
+  description          = "Minimal execution role for the Home Assistant Alexa Lambda bridge."
   assume_role_policy   = data.aws_iam_policy_document.lambda_assume_role.json
   max_session_duration = 3600
 }
@@ -180,7 +180,7 @@ resource "cloudflare_dns_record" "home_assistant" {
   type    = "CNAME"
   proxied = true
   ttl     = 1
-  comment = "Home Assistant via the homeassistant-k3s Cloudflare Tunnel; managed by OpenTofu."
+  comment = "Home Assistant via the home-assistant-k3s Cloudflare Tunnel; managed by OpenTofu."
 }
 
 check "tunnel_origin_contract" {
