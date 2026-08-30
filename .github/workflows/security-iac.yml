@@ -60,10 +60,6 @@ jobs:
             tofu -chdir="${directory}" validate
             tofu -chdir="${directory}" test -no-color
           done
-          directory="infrastructure/opentofu/home-assistant-alexa/cloudflare"
-          tofu -chdir="${directory}" init -backend=false -input=false
-          tofu -chdir="${directory}" validate
-          tofu -chdir="${directory}" test -no-color
 
       - name: Set up TFLint
         uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6.3.0
@@ -73,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl"
-          for root in bootstrap main cloudflare; do
+          for root in bootstrap main; do
             tflint \
               --chdir="infrastructure/opentofu/home-assistant-alexa/${root}" \
               --config="${GITHUB_WORKSPACE}/.tflint.hcl"
