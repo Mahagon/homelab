@@ -129,6 +129,7 @@ it to this account and zone with only:
 - Cloudflare Tunnel / cloudflared Connector: Read and Write.
 - Zone: Read.
 - DNS: Read and Write for `example.invalid`.
+- Zone WAF: Read and Write for `example.invalid`.
 
 The GitHub role uses OIDC and accepts only the exact subject
 `repo:Mahagon/homelab:environment:aws-production`. It cannot be assumed by a
@@ -276,6 +277,53 @@ curl.exe --include https://homeassistant.example.invalid/api/
 
 The API request without a token must return `401 Unauthorized`. Public DNS must
 not contain the home WAN address.
+
+### Cloudflare WAF hardening
+
+Cloudflare automatically deploys the Free Managed Ruleset on Free-plan zones.
+The `main` OpenTofu root additionally owns the zone entry-point rulesets for the
+custom-firewall and rate-limit phases. It configures:
+
+- hostname-scoped blocking of non-HTTPS edge ports;
+- blocking of `CONNECT`, `TRACE`, and `TRACK`, which Home Assistant does not
+  require;
+- blocking of common source-control, secret-file, WordPress, and phpMyAdmin
+  reconnaissance paths; and
+- the Free plan's single rate-limit rule: more than 10 requests to Home
+  Assistant's `/auth/login_flow` path from one IP in 10 seconds causes a
+  10-second block.
+
+The Free plan does not make `Host` available in rate-limit expressions. The
+rate-limit rule therefore uses Home Assistant's distinctive login-flow path and
+applies to that path across the `example.invalid` zone. It intentionally excludes
+`/auth/token`, `/api`, WebSocket traffic, and `/api/alexa/smart_home` so normal
+companion-app, OAuth, and Alexa operation is unaffected.
+
+Each zone can have only one entry-point ruleset per phase, and OpenTofu treats
+each `cloudflare_ruleset` as the complete configuration for that phase. Before
+the first apply, review **Security > Security rules** in Cloudflare. If custom or
+rate-limit rules already exist, merge them into `cloudflare-security.tf` without
+exceeding the Free-plan limits, then import the existing phase ruleset:
+
+```powershell
+tofu import cloudflare_ruleset.home_assistant_custom_waf `
+  'zones/<ZONE_ID>/<CUSTOM_PHASE_RULESET_ID>'
+tofu import cloudflare_ruleset.home_assistant_rate_limit `
+  'zones/<ZONE_ID>/<RATE_LIMIT_PHASE_RULESET_ID>'
+```
+
+Do not apply a plan that removes an unrelated existing rule. After applying,
+verify the protected paths and inspect sampled matches under **Security > Events**:
+
+```powershell
+curl.exe --include http://homeassistant.example.invalid/
+curl.exe --include https://homeassistant.example.invalid/.git/config
+curl.exe --include --request TRACE https://homeassistant.example.invalid/
+curl.exe --include https://homeassistant.example.invalid/api/
+```
+
+The first three requests must be blocked by Cloudflare. The unauthenticated API
+request must still reach Home Assistant and return `401 Unauthorized`.
 
 ## 8. Preserve fast and resilient LAN access
 

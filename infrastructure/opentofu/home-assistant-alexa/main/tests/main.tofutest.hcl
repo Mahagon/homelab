@@ -90,6 +90,31 @@ run "secure_stack_without_skill" {
     condition     = length(cloudflare_dns_record.home_assistant) == 0
     error_message = "DNS must remain unpublished during the initial connector deployment."
   }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_custom_waf.kind == "zone" && cloudflare_ruleset.home_assistant_custom_waf.phase == "http_request_firewall_custom"
+    error_message = "Custom WAF controls must use the zone custom-firewall phase."
+  }
+
+  assert {
+    condition     = length(cloudflare_ruleset.home_assistant_custom_waf.rules) == 3 && alltrue([for rule in cloudflare_ruleset.home_assistant_custom_waf.rules : rule.action == "block" && rule.enabled && strcontains(rule.expression, "homeassistant.example.invalid")])
+    error_message = "All custom WAF rules must block and remain scoped to the Home Assistant hostname."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_rate_limit.kind == "zone" && cloudflare_ruleset.home_assistant_rate_limit.phase == "http_ratelimit" && length(cloudflare_ruleset.home_assistant_rate_limit.rules) == 1
+    error_message = "The Free plan permits one zone-level rate-limiting rule."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_rate_limit.rules[0].ratelimit.period == 10 && cloudflare_ruleset.home_assistant_rate_limit.rules[0].ratelimit.requests_per_period == 10 && cloudflare_ruleset.home_assistant_rate_limit.rules[0].ratelimit.mitigation_timeout == 10
+    error_message = "Authentication rate limiting must stay within the Cloudflare Free-plan limits."
+  }
+
+  assert {
+    condition     = strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/login_flow") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/token") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/api")
+    error_message = "Rate limiting must protect login creation without affecting OAuth token, Home Assistant API, or Alexa traffic."
+  }
 }
 
 run "skill_and_dns_are_restricted" {

@@ -53,7 +53,8 @@ graph TD
 ## Prerequisites
 
 - USB flash drive for FCOS installation
-- Cloudflare account + API token (Zone:DNS:Edit + Zone:Zone:Read permissions)
+- Cloudflare account + least-privilege API tokens (DNS and Zone Read; the
+  Home Assistant OpenTofu token also needs Tunnel and Zone WAF Write)
 - kubectl + helm CLI
 - A workstation on the same network
 - Amazon Developer account and AWS account for the Alexa Smart Home Lambda
