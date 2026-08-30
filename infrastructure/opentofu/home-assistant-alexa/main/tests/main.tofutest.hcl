@@ -115,6 +115,36 @@ run "secure_stack_without_skill" {
     condition     = strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/login_flow") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/token") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/api")
     error_message = "Rate limiting must protect login creation without affecting OAuth token, Home Assistant API, or Alexa traffic."
   }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_cache.phase == "http_request_cache_settings" && cloudflare_ruleset.home_assistant_cache.rules[0].action == "set_cache_settings" && !cloudflare_ruleset.home_assistant_cache.rules[0].action_parameters.cache
+    error_message = "Every Home Assistant response must bypass the Cloudflare cache."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_cache.rules[0].expression == "(http.host eq \"homeassistant.example.invalid\")"
+    error_message = "The cache bypass must remain scoped to the Home Assistant hostname."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_response_headers.phase == "http_response_headers_transform" && cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["strict-transport-security"].value == "max-age=2592000"
+    error_message = "Home Assistant responses must receive the conservative 30-day HSTS policy."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["x-content-type-options"].value == "nosniff" && !strcontains(cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["strict-transport-security"].value, "includeSubDomains") && !strcontains(cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["strict-transport-security"].value, "preload")
+    error_message = "Security headers must disable MIME sniffing without imposing HSTS on unrelated subdomains."
+  }
+
+  assert {
+    condition     = cloudflare_zone_setting.minimum_tls_version.value == "1.2" && cloudflare_zone_setting.tls_1_3.value == "on"
+    error_message = "The Cloudflare zone must require TLS 1.2 or newer and offer TLS 1.3."
+  }
+
+  assert {
+    condition     = cloudflare_zone_dnssec.zone.status == "active"
+    error_message = "Cloudflare must sign the example.invalid zone with DNSSEC."
+  }
 }
 
 run "skill_and_dns_are_restricted" {

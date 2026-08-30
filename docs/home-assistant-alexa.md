@@ -130,6 +130,11 @@ it to this account and zone with only:
 - Zone: Read.
 - DNS: Read and Write for `example.invalid`.
 - Zone WAF: Read and Write for `example.invalid`.
+- Cache Settings: Read and Write for `example.invalid`.
+- Zone Transform Rules: Read and Write for `example.invalid`.
+- Zone Settings: Read and Write for `example.invalid`.
+- Account Rulesets: Read and Write.
+- Account Filter Lists: Read and Write.
 
 The GitHub role uses OIDC and accepts only the exact subject
 `repo:Mahagon/homelab:environment:aws-production`. It cannot be assumed by a
@@ -278,11 +283,12 @@ curl.exe --include https://homeassistant.example.invalid/api/
 The API request without a token must return `401 Unauthorized`. Public DNS must
 not contain the home WAN address.
 
-### Cloudflare WAF hardening
+### Cloudflare edge hardening
 
 Cloudflare automatically deploys the Free Managed Ruleset on Free-plan zones.
 The `main` OpenTofu root additionally owns the zone entry-point rulesets for the
-custom-firewall and rate-limit phases. It configures:
+custom-firewall, rate-limit, cache-settings, and response-header phases. It
+configures:
 
 - hostname-scoped blocking of non-HTTPS edge ports;
 - blocking of `CONNECT`, `TRACE`, and `TRACK`, which Home Assistant does not
@@ -291,7 +297,11 @@ custom-firewall and rate-limit phases. It configures:
   reconnaissance paths; and
 - the Free plan's single rate-limit rule: more than 10 requests to Home
   Assistant's `/auth/login_flow` path from one IP in 10 seconds causes a
-  10-second block.
+  10-second block;
+- an explicit cache bypass for every response from the Home Assistant hostname;
+  and
+- a 30-day hostname-scoped HSTS header without `includeSubDomains` or preload,
+  plus `X-Content-Type-Options: nosniff`.
 
 The Free plan does not make `Host` available in rate-limit expressions. The
 rate-limit rule therefore uses Home Assistant's distinctive login-flow path and
@@ -301,15 +311,20 @@ companion-app, OAuth, and Alexa operation is unaffected.
 
 Each zone can have only one entry-point ruleset per phase, and OpenTofu treats
 each `cloudflare_ruleset` as the complete configuration for that phase. Before
-the first apply, review **Security > Security rules** in Cloudflare. If custom or
-rate-limit rules already exist, merge them into `cloudflare-security.tf` without
-exceeding the Free-plan limits, then import the existing phase ruleset:
+the first apply, review **Security > Security rules**, **Rules > Cache Rules**,
+and **Rules > Transform Rules** in Cloudflare. If rules already exist in any of
+these four phases, merge them into `cloudflare-security.tf` without exceeding
+the Free-plan limits, then import the existing phase ruleset:
 
 ```powershell
 tofu import cloudflare_ruleset.home_assistant_custom_waf `
   'zones/<ZONE_ID>/<CUSTOM_PHASE_RULESET_ID>'
 tofu import cloudflare_ruleset.home_assistant_rate_limit `
   'zones/<ZONE_ID>/<RATE_LIMIT_PHASE_RULESET_ID>'
+tofu import cloudflare_ruleset.home_assistant_cache `
+  'zones/<ZONE_ID>/<CACHE_PHASE_RULESET_ID>'
+tofu import cloudflare_ruleset.home_assistant_response_headers `
+  'zones/<ZONE_ID>/<RESPONSE_HEADERS_PHASE_RULESET_ID>'
 ```
 
 Do not apply a plan that removes an unrelated existing rule. After applying,
@@ -324,6 +339,56 @@ curl.exe --include https://homeassistant.example.invalid/api/
 
 The first three requests must be blocked by Cloudflare. The unauthenticated API
 request must still reach Home Assistant and return `401 Unauthorized`.
+
+Check the successful API response headers as well:
+
+```powershell
+curl.exe --silent --dump-header - --output NUL `
+  https://homeassistant.example.invalid/
+```
+
+The response must contain `Strict-Transport-Security: max-age=2592000`,
+`X-Content-Type-Options: nosniff`, and a `CF-Cache-Status` value other than
+`HIT`. Do not add `includeSubDomains` or preload until every hostname in the
+zone has been reviewed and a long-lived HTTPS commitment is intended.
+
+### Zone-wide DNS and TLS controls
+
+The same root enables Cloudflare DNSSEC signing, requires TLS 1.2 or newer, and
+offers TLS 1.3. Unlike the hostname-scoped WAF, cache, and header rules, the TLS
+settings affect every proxied hostname under `example.invalid`. Review all such
+services before applying a change from TLS 1.0 or 1.1.
+
+Enabling DNSSEC in Cloudflare is only the first half of deployment. After the
+apply, retrieve the generated public DS record:
+
+```powershell
+tofu output -raw cloudflare_dnssec_ds_record
+tofu output -json cloudflare_dnssec_registrar_fields
+```
+
+Use either the full DS record or its separate key-tag, algorithm, digest-type,
+and digest fields at the registrar for `example.invalid`. Wait for the
+delegation to propagate, then verify it through an external validating resolver:
+
+```powershell
+Resolve-DnsName -Type DS example.invalid -Server 1.1.1.1
+Resolve-DnsName homeassistant.example.invalid -DnssecOk -Server 1.1.1.1
+```
+
+If DNSSEC was already enabled manually, import it before applying:
+
+```powershell
+tofu import cloudflare_zone_dnssec.zone '<ZONE_ID>'
+```
+
+Never disable Cloudflare DNSSEC while the registrar still publishes the DS
+record; that would make the entire domain fail validation. Remove the registrar
+DS record first and wait for its TTL before disabling DNSSEC during a rollback.
+
+Certificate Transparency Monitoring has no suitable resource in the pinned
+Cloudflare provider. Enable it once under **SSL/TLS > Edge Certificates >
+Certificate Transparency Monitoring** and add the operational email address.
 
 ## 8. Preserve fast and resilient LAN access
 

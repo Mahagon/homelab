@@ -64,3 +64,59 @@ resource "cloudflare_ruleset" "home_assistant_rate_limit" {
     }
   ]
 }
+
+# Home Assistant is authenticated and stateful. Explicitly bypassing the edge
+# cache prevents a future origin-header change from making any response cache
+# eligible, including API and authentication responses.
+resource "cloudflare_ruleset" "home_assistant_cache" {
+  zone_id     = var.cloudflare_zone_id
+  name        = "Home Assistant cache policy"
+  description = "Never cache Home Assistant responses at the Cloudflare edge."
+  kind        = "zone"
+  phase       = "http_request_cache_settings"
+
+  rules = [
+    {
+      ref         = "bypass_home_assistant_cache"
+      description = "Bypass Cloudflare cache for every Home Assistant response"
+      expression  = local.home_assistant_waf_scope
+      action      = "set_cache_settings"
+      enabled     = true
+      action_parameters = {
+        cache = false
+      }
+    }
+  ]
+}
+
+# Start HSTS with a reversible 30-day lifetime and deliberately omit
+# includeSubDomains and preload because this module owns only one zone hostname.
+resource "cloudflare_ruleset" "home_assistant_response_headers" {
+  zone_id     = var.cloudflare_zone_id
+  name        = "Home Assistant security response headers"
+  description = "Set conservative browser security headers on Home Assistant responses."
+  kind        = "zone"
+  phase       = "http_response_headers_transform"
+
+  rules = [
+    {
+      ref         = "home_assistant_security_headers"
+      description = "Set HSTS and disable MIME content sniffing for Home Assistant"
+      expression  = local.home_assistant_waf_scope
+      action      = "rewrite"
+      enabled     = true
+      action_parameters = {
+        headers = {
+          "strict-transport-security" = {
+            operation = "set"
+            value     = "max-age=2592000"
+          }
+          "x-content-type-options" = {
+            operation = "set"
+            value     = "nosniff"
+          }
+        }
+      }
+    }
+  ]
+}

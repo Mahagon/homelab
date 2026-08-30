@@ -76,8 +76,12 @@ ignores that make the whole repository appear compliant.
 | Lambda cost amplification | Eight-second timeout, 256 MB memory, and the AWS account-level concurrency quota. |
 | Tunnel compromise | Connector token is a sensitive state output and Kubernetes Secret; the pod cannot modify remote routing. Rotate after suspected disclosure. Connector egress is restricted to TCP/UDP 7844. |
 | DNS takeover or drift | Dedicated Cloudflare API token, OpenTofu-managed proxied CNAME, ExternalDNS exclusion, and post-apply empty plan. |
+| Forged DNS responses | Cloudflare signs the zone with DNSSEC; the generated DS record must also be published at the registrar and verified externally. |
 | Web exploit and reconnaissance traffic | Cloudflare's automatically deployed Free Managed Ruleset plus OpenTofu-managed hostname-scoped custom WAF blocks non-HTTPS ports, unsafe methods, and common secret/CMS probes. |
 | Authentication request flooding | The Free-plan rate-limit rule blocks an IP for 10 seconds after more than 10 Home Assistant login-flow requests in 10 seconds; OAuth token, API, WebSocket, and Alexa paths are excluded. |
+| Sensitive response caching | A hostname-scoped Cache Rule makes every Home Assistant response ineligible for Cloudflare edge caching. |
+| TLS downgrade and browser content confusion | The zone requires TLS 1.2 or newer and enables TLS 1.3; Home Assistant responses receive a conservative 30-day HSTS policy and `nosniff` without affecting sibling subdomains. |
+| Unauthorized certificate issuance | Cloudflare Certificate Transparency Monitoring is an explicit one-time dashboard control because provider v5.24 has no suitable managed resource. |
 | CI credential theft | Short-lived GitHub OIDC credentials, exact trust subject, read-only default workflow permissions, and pinned actions. |
 | Accidental broad Alexa exposure | Explicit 14-entity allowlist; no domain/glob includes and no proactive-event credentials. |
 

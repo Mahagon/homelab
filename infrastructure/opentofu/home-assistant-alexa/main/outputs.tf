@@ -24,3 +24,17 @@ output "alexa_permission_configured" {
   value       = var.alexa_skill_id != ""
 }
 
+output "cloudflare_dnssec_ds_record" {
+  description = "Public DS record that must be installed at the example.invalid registrar to complete the DNSSEC chain of trust."
+  value       = cloudflare_zone_dnssec.zone.ds
+}
+
+output "cloudflare_dnssec_registrar_fields" {
+  description = "Structured DNSSEC fields for registrars that do not accept a complete DS record."
+  value = {
+    key_tag     = cloudflare_zone_dnssec.zone.key_tag
+    algorithm   = cloudflare_zone_dnssec.zone.algorithm
+    digest_type = cloudflare_zone_dnssec.zone.digest_type
+    digest      = cloudflare_zone_dnssec.zone.digest
+  }
+}
