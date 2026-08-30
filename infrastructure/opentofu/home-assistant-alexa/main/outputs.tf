@@ -16,7 +16,8 @@ output "cloudflared_tunnel_token" {
 
 output "public_hostname" {
   description = "Home Assistant hostname used for Alexa and remote access."
-  value       = var.home_assistant_hostname
+  value       = local.home_assistant_hostname
+  sensitive   = true
 }
 
 output "alexa_permission_configured" {
@@ -25,7 +26,7 @@ output "alexa_permission_configured" {
 }
 
 output "cloudflare_dnssec_ds_record" {
-  description = "Public DS record that must be installed at the example.invalid registrar to complete the DNSSEC chain of trust."
+  description = "Public DS record that must be installed at the domain registrar to complete the DNSSEC chain of trust."
   value       = cloudflare_zone_dnssec.zone.ds
 }
 

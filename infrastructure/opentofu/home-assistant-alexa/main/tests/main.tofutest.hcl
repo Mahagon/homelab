@@ -50,6 +50,7 @@ mock_provider "cloudflare" {
 variables {
   cloudflare_account_id = "0123456789abcdef0123456789abcdef"
   cloudflare_zone_id    = "fedcba9876543210fedcba9876543210"
+  home_assistant_domain = "example.invalid"
   budget_email          = "alerts@example.com"
 }
 
@@ -143,7 +144,7 @@ run "secure_stack_without_skill" {
 
   assert {
     condition     = cloudflare_zone_dnssec.zone.status == "active"
-    error_message = "Cloudflare must sign the example.invalid zone with DNSSEC."
+    error_message = "Cloudflare must sign the configured zone with DNSSEC."
   }
 }
 
@@ -181,14 +182,14 @@ run "reject_wrong_region" {
   expect_failures = [var.aws_region]
 }
 
-run "reject_non_https_url" {
+run "reject_malformed_domain" {
   command = plan
 
   variables {
-    home_assistant_url = "http://homeassistant.example.invalid"
+    home_assistant_domain = "https://example.invalid"
   }
 
-  expect_failures = [var.home_assistant_url]
+  expect_failures = [var.home_assistant_domain]
 }
 
 run "reject_malformed_skill_id" {

@@ -2,15 +2,6 @@ name: Security and IaC checks
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/**"
-      - ".checkov.yml"
-      - ".tflint.hcl"
-      - "butane/**"
-      - "infrastructure/**"
-      - "k8s/apps/cloudflared/**"
-      - "k8s/apps/external-dns/**"
-      - "k8s/apps/home-assistant/**"
   push:
     branches:
       - main
@@ -24,15 +15,65 @@ on:
       - "k8s/apps/external-dns/**"
       - "k8s/apps/home-assistant/**"
   workflow_dispatch:
+    inputs:
+      apply:
+        description: Plan and apply the production stack from main
+        required: true
+        type: boolean
+        default: false
+      allow_destroy:
+        description: Allow delete or replacement actions in a manual production plan
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: security-iac-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Deployment change detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.detect.outputs.deploy }}
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect deployable changes
+        id: detect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          REQUESTED_APPLY: ${{ inputs.apply }}
+        run: |
+          set -euo pipefail
+          deploy=false
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            deploy="${REQUESTED_APPLY}"
+          elif [[ "${EVENT_NAME}" == "push" ]]; then
+            base="${BEFORE_SHA}"
+            if [[ -z "${base}" || "${base}" == "0000000000000000000000000000000000000000" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+              base="$(git rev-parse "${GITHUB_SHA}^")"
+            fi
+
+            if git diff --name-only "${base}" "${GITHUB_SHA}" |
+              grep -Eq '^infrastructure/opentofu/home-assistant-alexa/main/(.*\.tf|.*\.tf\.json|\.terraform\.lock\.hcl|lambda/)'; then
+              deploy=true
+            fi
+          fi
+
+          echo "deploy=${deploy}" >> "${GITHUB_OUTPUT}"
+
   opentofu:
     name: OpenTofu and Lambda
     runs-on: ubuntu-latest
@@ -178,3 +219,134 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           hide-progress: true
+
+  apply:
+    name: Plan and apply production
+    needs:
+      - changes
+      - opentofu
+      - kubernetes
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.deploy == 'true' &&
+      needs.opentofu.result == 'success' &&
+      needs.kubernetes.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: aws-production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_home_assistant_domain: ${{ secrets.HOME_ASSISTANT_DOMAIN }}
+      TF_VAR_budget_email: ${{ secrets.AWS_BUDGET_EMAIL }}
+      TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+      TF_VAR_alexa_skill_id: ${{ vars.ALEXA_SKILL_ID }}
+      TF_VAR_publish_dns: ${{ vars.PUBLISH_DNS }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Mask derived Home Assistant values
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${TF_VAR_home_assistant_domain}" ]]; then
+            echo "HOME_ASSISTANT_DOMAIN is not configured in aws-production." >&2
+            exit 1
+          fi
+          echo "::add-mask::${TF_VAR_home_assistant_domain}"
+          echo "::add-mask::homeassistant.${TF_VAR_home_assistant_domain}"
+          echo "::add-mask::https://homeassistant.${TF_VAR_home_assistant_domain}"
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: github-home-assistant-alexa
+          aws-region: eu-west-1
+
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.12.5
+          tofu_wrapper: false
+
+      - name: Initialize remote state
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        run: tofu init -input=false -backend-config="bucket=${{ vars.TOFU_STATE_BUCKET }}"
+
+      - name: Validate production root
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        run: tofu validate
+
+      - name: Create deployment plan
+        id: plan
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        shell: bash
+        run: |
+          set +e
+          tofu plan \
+            -input=false \
+            -lock-timeout=5m \
+            -no-color \
+            -out=deployment.tfplan \
+            -detailed-exitcode
+          exit_code=$?
+          set -e
+
+          if [[ ${exit_code} -eq 1 ]]; then
+            exit 1
+          fi
+          echo "exit_code=${exit_code}" >> "${GITHUB_OUTPUT}"
+
+      - name: Reject unapproved destructive changes
+        if: steps.plan.outputs.exit_code == '2'
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        shell: bash
+        env:
+          ALLOW_DESTROY: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_destroy }}
+        run: |
+          set -euo pipefail
+          if [[ "${ALLOW_DESTROY}" == "true" ]]; then
+            exit 0
+          fi
+
+          destructive_count="$(
+            tofu show -json deployment.tfplan |
+              jq '[.resource_changes[]? | select(.change.actions | index("delete"))] | length'
+          )"
+          if [[ "${destructive_count}" -ne 0 ]]; then
+            echo "The plan contains ${destructive_count} delete or replacement action(s)." >&2
+            echo "Review it, then use a manual main-branch dispatch with allow_destroy=true if intentional." >&2
+            exit 1
+          fi
+
+      - name: Apply saved plan
+        if: steps.plan.outputs.exit_code == '2'
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        run: tofu apply -input=false -auto-approve deployment.tfplan
+
+      - name: Confirm no post-apply drift
+        if: steps.plan.outputs.exit_code == '2'
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        shell: bash
+        run: |
+          set +e
+          tofu plan -input=false -lock-timeout=5m -no-color -detailed-exitcode
+          exit_code=$?
+          set -e
+          if [[ ${exit_code} -ne 0 ]]; then
+            echo "Expected an empty post-apply plan, got exit code ${exit_code}." >&2
+            exit 1
+          fi
+
+      - name: Remove sensitive plan file
+        if: always()
+        working-directory: infrastructure/opentofu/home-assistant-alexa/main
+        shell: bash
+        run: rm -f deployment.tfplan

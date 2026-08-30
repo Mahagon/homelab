@@ -5,7 +5,7 @@ the Lambda forwards directives through the protected outbound-only Cloudflare
 Tunnel. `infrastructure/opentofu/home-assistant-alexa/main` is the single
 OpenTofu root for this stack.
 
-This runbook publishes `homeassistant.example.invalid` through an outbound-only
+This runbook publishes `homeassistant.<your-domain>` through an outbound-only
 Cloudflare Tunnel and connects a private German Alexa Smart Home skill through
 an AWS Lambda function. No inbound Home Assistant port is required on the UniFi
 gateway.
@@ -111,34 +111,69 @@ change and a separate apply.
 Create an environment named `aws-production` and restrict deployment branches
 to `main`. Add required reviewers if the repository plan supports them.
 
-Add these repository or environment variables:
+Add these environment variables:
 
 | Name | Value |
 |---|---|
 | `AWS_DEPLOY_ROLE_ARN` | Bootstrap output `github_deployment_role_arn` |
 | `TOFU_STATE_BUCKET` | Bootstrap output `state_bucket_name` |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `CLOUDFLARE_ZONE_ID` | Zone ID for `example.invalid` |
-| `AWS_BUDGET_EMAIL` | Address for budget notifications |
+| `CLOUDFLARE_ZONE_ID` | Zone ID for `<your-domain>` |
 | `ALEXA_SKILL_ID` | Empty until the ASK deployment creates the skill |
+| `PUBLISH_DNS` | `true` after the tunnel connectors are healthy |
 
-Add the environment secret `CLOUDFLARE_OPENTOFU_API_TOKEN`. Create a dedicated
+Add these environment secrets. Enter them interactively so their values do not
+appear in shell history:
+
+| Secret | Purpose |
+|---|---|
+| `HOME_ASSISTANT_DOMAIN` | Root domain only, without `homeassistant.`, a scheme, or a path |
+| `CLOUDFLARE_API_TOKEN` | Dedicated token used only by this OpenTofu stack |
+| `AWS_BUDGET_EMAIL` | Address for budget notifications |
+
+Create a dedicated Cloudflare token; do not reuse the cert-manager or
+ExternalDNS token. Restrict
 Cloudflare token; do not reuse the cert-manager or ExternalDNS token. Restrict
 it to this account and zone with only:
 
 - Cloudflare Tunnel / cloudflared Connector: Read and Write.
 - Zone: Read.
-- DNS: Read and Write for `example.invalid`.
-- Zone WAF: Read and Write for `example.invalid`.
-- Cache Settings: Read and Write for `example.invalid`.
-- Zone Transform Rules: Read and Write for `example.invalid`.
-- Zone Settings: Read and Write for `example.invalid`.
+- DNS: Read and Write for `<your-domain>`.
+- Zone WAF: Read and Write for `<your-domain>`.
+- Cache Settings: Read and Write for `<your-domain>`.
+- Zone Transform Rules: Read and Write for `<your-domain>`.
+- Zone Settings: Read and Write for `<your-domain>`.
 - Account Rulesets: Read and Write.
 - Account Filter Lists: Read and Write.
 
 The GitHub role uses OIDC and accepts only the exact subject
 `repo:Mahagon/homelab:environment:aws-production`. It cannot be assumed by a
 different repository or a normal branch workflow.
+
+Configure the environment from PowerShell with `gh`:
+
+```powershell
+$repoName = "Mahagon/homelab"
+$environmentName = "aws-production"
+
+gh api --method PUT "repos/$repoName/environments/$environmentName"
+
+gh secret set HOME_ASSISTANT_DOMAIN --repo $repoName --env $environmentName
+gh secret set CLOUDFLARE_API_TOKEN --repo $repoName --env $environmentName
+gh secret set AWS_BUDGET_EMAIL --repo $repoName --env $environmentName
+
+$bootstrapDir = "infrastructure/opentofu/home-assistant-alexa/bootstrap"
+gh variable set AWS_DEPLOY_ROLE_ARN --repo $repoName --env $environmentName --body (tofu -chdir=$bootstrapDir output -raw github_deployment_role_arn)
+gh variable set TOFU_STATE_BUCKET --repo $repoName --env $environmentName --body (tofu -chdir=$bootstrapDir output -raw state_bucket_name)
+
+gh variable set CLOUDFLARE_ACCOUNT_ID --repo $repoName --env $environmentName --body "<ACCOUNT_ID>"
+gh variable set CLOUDFLARE_ZONE_ID --repo $repoName --env $environmentName --body "<ZONE_ID>"
+gh variable set ALEXA_SKILL_ID --repo $repoName --env $environmentName --body "<SKILL_ID>"
+gh variable set PUBLISH_DNS --repo $repoName --env $environmentName --body "true"
+
+gh secret list --repo $repoName --env $environmentName
+gh variable list --repo $repoName --env $environmentName
+```
 
 ## 5. Import the existing tunnel and deploy AWS resources
 
@@ -156,6 +191,7 @@ For a local apply:
 Set-Location infrastructure/opentofu/home-assistant-alexa/main
 $env:AWS_PROFILE = "homelab-admin"
 $env:CLOUDFLARE_API_TOKEN = Read-Host "Cloudflare OpenTofu token"
+$env:TF_VAR_home_assistant_domain = Read-Host "Home Assistant root domain"
 
 tofu init -backend-config="bucket=<TOFU_STATE_BUCKET>"
 tofu import cloudflare_zero_trust_tunnel_cloudflared.home_assistant `
@@ -248,7 +284,7 @@ because they change over time.
 ## 7. Move the existing DNS record under OpenTofu
 
 First let Argo CD sync the ExternalDNS exclusion and confirm ExternalDNS is no
-longer reconciling `homeassistant.example.invalid`.
+longer reconciling `homeassistant.<your-domain>`.
 
 Find the existing Home Assistant DNS record ID in the Cloudflare dashboard or
 API. With `TF_VAR_publish_dns=true`, import it into the counted resource:
@@ -257,6 +293,7 @@ API. With `TF_VAR_publish_dns=true`, import it into the counted resource:
 Set-Location infrastructure/opentofu/home-assistant-alexa/main
 $env:TF_VAR_cloudflare_account_id = "<ACCOUNT_ID>"
 $env:TF_VAR_cloudflare_zone_id = "<ZONE_ID>"
+$env:TF_VAR_home_assistant_domain = "<YOUR_DOMAIN>"
 $env:TF_VAR_budget_email = "<EMAIL>"
 $env:TF_VAR_publish_dns = "true"
 $env:CLOUDFLARE_API_TOKEN = Read-Host "Cloudflare OpenTofu token"
@@ -270,14 +307,21 @@ The plan should replace the old A/AAAA record with a proxied CNAME targeting
 `<tunnel-id>.cfargotunnel.com`. Remove only the obsolete ExternalDNS ownership
 TXT record for this hostname after confirming that no other record uses it.
 
-For later deployments, dispatch the GitHub workflow with `publish_dns` enabled.
+For later deployments, set the `PUBLISH_DNS` environment variable to `true`.
+Changes to the main OpenTofu root or Lambda are applied automatically after
+both security jobs pass. To request an explicit main-branch deployment:
+
+```powershell
+gh workflow run security-iac.yml --repo Mahagon/homelab --ref main -f apply=true -f allow_destroy=false
+gh run watch --repo Mahagon/homelab
+```
 
 Verify from a network outside the home:
 
 ```powershell
-Resolve-DnsName homeassistant.example.invalid
-curl.exe --fail-with-body https://homeassistant.example.invalid/auth/authorize
-curl.exe --include https://homeassistant.example.invalid/api/
+Resolve-DnsName homeassistant.<your-domain>
+curl.exe --fail-with-body https://homeassistant.<your-domain>/auth/authorize
+curl.exe --include https://homeassistant.<your-domain>/api/
 ```
 
 The API request without a token must return `401 Unauthorized`. Public DNS must
@@ -305,7 +349,7 @@ configures:
 
 The Free plan does not make `Host` available in rate-limit expressions. The
 rate-limit rule therefore uses Home Assistant's distinctive login-flow path and
-applies to that path across the `example.invalid` zone. It intentionally excludes
+applies to that path across the `<your-domain>` zone. It intentionally excludes
 `/auth/token`, `/api`, WebSocket traffic, and `/api/alexa/smart_home` so normal
 companion-app, OAuth, and Alexa operation is unaffected.
 
@@ -331,10 +375,10 @@ Do not apply a plan that removes an unrelated existing rule. After applying,
 verify the protected paths and inspect sampled matches under **Security > Events**:
 
 ```powershell
-curl.exe --include http://homeassistant.example.invalid/
-curl.exe --include https://homeassistant.example.invalid/.git/config
-curl.exe --include --request TRACE https://homeassistant.example.invalid/
-curl.exe --include https://homeassistant.example.invalid/api/
+curl.exe --include http://homeassistant.<your-domain>/
+curl.exe --include https://homeassistant.<your-domain>/.git/config
+curl.exe --include --request TRACE https://homeassistant.<your-domain>/
+curl.exe --include https://homeassistant.<your-domain>/api/
 ```
 
 The first three requests must be blocked by Cloudflare. The unauthenticated API
@@ -344,7 +388,7 @@ Check the successful API response headers as well:
 
 ```powershell
 curl.exe --silent --dump-header - --output NUL `
-  https://homeassistant.example.invalid/
+  https://homeassistant.<your-domain>/
 ```
 
 The response must contain `Strict-Transport-Security: max-age=2592000`,
@@ -356,7 +400,7 @@ zone has been reviewed and a long-lived HTTPS commitment is intended.
 
 The same root enables Cloudflare DNSSEC signing, requires TLS 1.2 or newer, and
 offers TLS 1.3. Unlike the hostname-scoped WAF, cache, and header rules, the TLS
-settings affect every proxied hostname under `example.invalid`. Review all such
+settings affect every proxied hostname under `<your-domain>`. Review all such
 services before applying a change from TLS 1.0 or 1.1.
 
 Enabling DNSSEC in Cloudflare is only the first half of deployment. After the
@@ -368,12 +412,12 @@ tofu output -json cloudflare_dnssec_registrar_fields
 ```
 
 Use either the full DS record or its separate key-tag, algorithm, digest-type,
-and digest fields at the registrar for `example.invalid`. Wait for the
+and digest fields at the registrar for `<your-domain>`. Wait for the
 delegation to propagate, then verify it through an external validating resolver:
 
 ```powershell
-Resolve-DnsName -Type DS example.invalid -Server 1.1.1.1
-Resolve-DnsName homeassistant.example.invalid -DnssecOk -Server 1.1.1.1
+Resolve-DnsName -Type DS <your-domain> -Server 1.1.1.1
+Resolve-DnsName homeassistant.<your-domain> -DnssecOk -Server 1.1.1.1
 ```
 
 If DNSSEC was already enabled manually, import it before applying:
@@ -395,7 +439,7 @@ Certificate Transparency Monitoring** and add the operational email address.
 In the UniFi Network application, add a local DNS record/host override:
 
 ```text
-homeassistant.example.invalid -> 192.168.178.10
+homeassistant.<your-domain> -> 192.168.178.10
 ```
 
 UniFi changes menu names between releases; look under Settings, DNS, or Local
@@ -459,8 +503,8 @@ the client secret. Enter:
 | Prompt | Value |
 |---|---|
 | Grant type | Authorization Code |
-| Authorization URL | `https://homeassistant.example.invalid/auth/authorize` |
-| Access-token URL | `https://homeassistant.example.invalid/auth/token` |
+| Authorization URL | `https://homeassistant.<your-domain>/auth/authorize` |
+| Access-token URL | `https://homeassistant.<your-domain>/auth/token` |
 | Client ID | `https://layla.amazon.com/` including trailing slash |
 | Client secret | A generated nonempty value; Home Assistant does not inspect it |
 | Authentication scheme | Request body credentials |

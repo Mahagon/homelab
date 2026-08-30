@@ -2,6 +2,23 @@ $scriptPath = Join-Path $PSScriptRoot '..\migrate-shelly-wifi.ps1'
 . $scriptPath
 
 Describe 'Shelly migration pure helpers' {
+    It 'requires an explicit Home Assistant URL when the environment fallback is absent' {
+        $previousUrl = $env:HOME_ASSISTANT_URL
+        $env:HOME_ASSISTANT_URL = $null
+        $threw = $false
+        try {
+            Invoke-ShellyMigration -HomeAssistantUrl ''
+        }
+        catch {
+            $threw = $_.Exception.Message -match 'Supply -HomeAssistantUrl or set the HOME_ASSISTANT_URL environment variable'
+        }
+        finally {
+            $env:HOME_ASSISTANT_URL = $previousUrl
+        }
+
+        $threw | Should Be $true
+    }
+
     It 'retries transient operations and returns the eventual result' {
         $counter = [pscustomobject]@{ Value = 0 }
         $result = Invoke-WithRetry -Description 'test operation' -Attempts 3 -DelaySeconds 0 -Operation {

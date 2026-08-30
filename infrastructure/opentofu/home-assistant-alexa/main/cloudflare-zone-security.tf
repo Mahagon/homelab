@@ -1,4 +1,4 @@
-# These settings apply to every proxied hostname in example.invalid, not only
+# These settings apply to every proxied hostname in the zone, not only
 # Home Assistant. TLS 1.2 remains compatible with current browsers, Alexa, and
 # Home Assistant clients while disabling obsolete TLS 1.0 and 1.1 handshakes.
 resource "cloudflare_zone_setting" "minimum_tls_version" {

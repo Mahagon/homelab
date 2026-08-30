@@ -9,25 +9,15 @@ variable "aws_region" {
   }
 }
 
-variable "home_assistant_hostname" {
-  description = "Public Home Assistant hostname used for both Alexa and remote access."
+variable "home_assistant_domain" {
+  description = "Root domain used to derive the public Home Assistant hostname."
   type        = string
-  default     = "homeassistant.example.invalid"
+  sensitive   = true
+  nullable    = false
 
   validation {
-    condition     = var.home_assistant_hostname == "homeassistant.example.invalid"
-    error_message = "This stack is intentionally restricted to homeassistant.example.invalid."
-  }
-}
-
-variable "home_assistant_url" {
-  description = "HTTPS Home Assistant base URL without a trailing slash."
-  type        = string
-  default     = "https://homeassistant.example.invalid"
-
-  validation {
-    condition     = var.home_assistant_url == "https://${var.home_assistant_hostname}" && !endswith(var.home_assistant_url, "/")
-    error_message = "home_assistant_url must be the exact HTTPS hostname without a trailing slash."
+    condition     = length(var.home_assistant_domain) <= 253 && can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$", var.home_assistant_domain))
+    error_message = "home_assistant_domain must be a lowercase fully qualified domain name without a scheme, path, or trailing dot."
   }
 }
 
@@ -42,7 +32,7 @@ variable "cloudflare_account_id" {
 }
 
 variable "cloudflare_zone_id" {
-  description = "Cloudflare zone identifier for example.invalid."
+  description = "Cloudflare zone identifier for the Home Assistant domain."
   type        = string
 
   validation {
@@ -65,6 +55,7 @@ variable "alexa_skill_id" {
 variable "budget_email" {
   description = "Email address receiving AWS cost-budget notifications."
   type        = string
+  sensitive   = true
 
   validation {
     condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.budget_email))
@@ -83,4 +74,3 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
-

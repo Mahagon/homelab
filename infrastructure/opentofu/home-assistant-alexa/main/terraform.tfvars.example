@@ -1,5 +1,6 @@
 cloudflare_account_id = "0123456789abcdef0123456789abcdef"
 cloudflare_zone_id    = "0123456789abcdef0123456789abcdef"
+home_assistant_domain = "example.invalid"
 budget_email          = "you@example.com"
 
 # Leave false until the cloudflared connectors report healthy.
@@ -7,4 +8,3 @@ publish_dns = false
 
 # Add after ASK creates the skill, then apply a second time.
 alexa_skill_id = ""
-

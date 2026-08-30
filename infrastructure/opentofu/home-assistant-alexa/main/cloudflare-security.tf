@@ -1,5 +1,5 @@
 locals {
-  home_assistant_waf_scope = "(http.host eq \"${var.home_assistant_hostname}\")"
+  home_assistant_waf_scope = "(http.host eq \"${local.home_assistant_hostname}\")"
 }
 
 # Cloudflare automatically deploys its Free Managed Ruleset on Free zones. This

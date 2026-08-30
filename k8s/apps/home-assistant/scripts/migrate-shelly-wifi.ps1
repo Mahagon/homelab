@@ -25,7 +25,7 @@ param(
     [string] $Mode = 'Audit',
 
     [ValidatePattern('^https?://')]
-    [string] $HomeAssistantUrl = 'https://homeassistant.example.invalid',
+    [string] $HomeAssistantUrl = $env:HOME_ASSISTANT_URL,
 
     [ValidatePattern('^\d{1,3}(\.\d{1,3}){3}$')]
     [string] $HomeAssistantIp = '192.168.178.10',
@@ -1283,7 +1283,7 @@ function Invoke-ShellyMigration {
     param(
         [ValidateSet('Audit', 'Migrate', 'Protect', 'Verify', 'RollbackStaged')]
         [string] $Mode = 'Audit',
-        [string] $HomeAssistantUrl = 'https://homeassistant.example.invalid',
+        [string] $HomeAssistantUrl = $env:HOME_ASSISTANT_URL,
         [string] $HomeAssistantIp = '192.168.178.10',
         [string] $HomeAssistantWebSocketUrl,
         [string] $TargetSubnet = '192.168.20.0/24',
@@ -1293,6 +1293,13 @@ function Invoke-ShellyMigration {
         [int] $DiscoveryTimeoutSeconds = 300,
         [string] $StatePath = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'ShellyVlanMigration\state.json')
     )
+
+    if ([string]::IsNullOrWhiteSpace($HomeAssistantUrl)) {
+        throw 'Supply -HomeAssistantUrl or set the HOME_ASSISTANT_URL environment variable.'
+    }
+    if ($HomeAssistantUrl -notmatch '^https?://') {
+        throw 'HomeAssistantUrl must start with http:// or https://.'
+    }
 
     if ([string]::IsNullOrWhiteSpace($HomeAssistantWebSocketUrl)) {
         $HomeAssistantWebSocketUrl = "ws://${HomeAssistantIp}:8123/api/websocket"

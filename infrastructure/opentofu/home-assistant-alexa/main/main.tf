@@ -1,6 +1,8 @@
 locals {
-  function_name = "home-assistant-alexa"
-  tunnel_name   = "home-assistant-k3s"
+  function_name           = "home-assistant-alexa"
+  tunnel_name             = "home-assistant-k3s"
+  home_assistant_hostname = "homeassistant.${var.home_assistant_domain}"
+  home_assistant_url      = "https://${local.home_assistant_hostname}"
   common_tags = merge({
     ManagedBy   = "OpenTofu"
     Project     = "home-assistant-alexa"
@@ -81,7 +83,7 @@ resource "aws_lambda_function" "alexa" {
 
   environment {
     variables = {
-      BASE_URL  = var.home_assistant_url
+      BASE_URL  = local.home_assistant_url
       LOG_LEVEL = "INFO"
     }
   }
@@ -104,7 +106,7 @@ resource "aws_lambda_function" "alexa" {
 
   lifecycle {
     precondition {
-      condition     = var.aws_region == "eu-west-1" && startswith(var.home_assistant_url, "https://")
+      condition     = var.aws_region == "eu-west-1" && startswith(local.home_assistant_url, "https://")
       error_message = "Alexa must run in eu-west-1 and communicate with Home Assistant over HTTPS."
     }
   }
@@ -155,12 +157,12 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "home_assistant" {
   config = {
     ingress = [
       {
-        hostname = var.home_assistant_hostname
+        hostname = local.home_assistant_hostname
         service  = "http://home-assistant.home-assistant.svc.cluster.local:8123"
         origin_request = {
           connect_timeout  = 10
           tcp_keep_alive   = 30
-          http_host_header = var.home_assistant_hostname
+          http_host_header = local.home_assistant_hostname
           no_tls_verify    = false
         }
       },
