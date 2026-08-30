@@ -68,6 +68,16 @@ run "secure_bootstrap_contract" {
     condition     = local.github_subject == "repo:Mahagon/homelab:environment:aws-production"
     error_message = "The deployment role must trust only the protected repository environment."
   }
+
+  assert {
+    condition     = contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "logs:DescribeLogGroups") && contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:ViewBudget")
+    error_message = "The deployment role must be able to refresh the managed log group and budget."
+  }
+
+  assert {
+    condition     = contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:ModifyBudget") && !contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:CreateBudget") && !contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:DeleteBudget") && !contains(flatten(data.aws_iam_policy_document.github_deployment.statement[*].actions), "budgets:DescribeBudget")
+    error_message = "The budget policy must use AWS Budgets' current fine-grained permission actions."
+  }
 }
 
 run "reject_wrong_region" {

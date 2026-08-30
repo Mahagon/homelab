@@ -159,8 +159,8 @@ resource "aws_iam_role" "github_deployment" {
 }
 
 data "aws_iam_policy_document" "github_deployment" {
-  #checkov:skip=CKV_AWS_111:The AWS Budgets API does not support a resource ARN; this statement is limited to the four budget read/write actions. Review 2027-08-01.
-  #checkov:skip=CKV_AWS_356:The AWS Budgets API does not support a resource ARN; this statement is limited to the four budget read/write actions. Review 2027-08-01.
+  #checkov:skip=CKV_AWS_111:The AWS Budgets API and logs:DescribeLogGroups do not support resource-level authorization; wildcard statements are limited to their required read/write actions. Review 2027-08-01.
+  #checkov:skip=CKV_AWS_356:The AWS Budgets API and logs:DescribeLogGroups do not support resource-level authorization; wildcard statements are limited to their required read/write actions. Review 2027-08-01.
   statement {
     sid       = "StateBucketMetadata"
     effect    = "Allow"
@@ -205,7 +205,6 @@ data "aws_iam_policy_document" "github_deployment" {
     actions = [
       "logs:CreateLogGroup",
       "logs:DeleteLogGroup",
-      "logs:DescribeLogGroups",
       "logs:ListTagsForResource",
       "logs:PutRetentionPolicy",
       "logs:TagResource",
@@ -215,6 +214,13 @@ data "aws_iam_policy_document" "github_deployment" {
       "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/home-assistant-alexa",
       "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/home-assistant-alexa:*"
     ]
+  }
+
+  statement {
+    sid       = "AlexaLogsDiscovery"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
   }
 
   statement {
@@ -254,10 +260,8 @@ data "aws_iam_policy_document" "github_deployment" {
     sid    = "CostBudget"
     effect = "Allow"
     actions = [
-      "budgets:CreateBudget",
-      "budgets:DeleteBudget",
-      "budgets:DescribeBudget",
-      "budgets:ModifyBudget"
+      "budgets:ModifyBudget",
+      "budgets:ViewBudget"
     ]
     resources = ["*"]
   }
