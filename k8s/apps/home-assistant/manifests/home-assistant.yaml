@@ -47,6 +47,10 @@ data:
       external_url: https://homeassistant.${DOMAIN}
       internal_url: https://homeassistant.${DOMAIN}
       customize:
+        switch.computer:
+          friendly_name: Computer
+        switch.weihnachtsbaum:
+          friendly_name: Weihnachtsbaum
         light.licht:
           friendly_name: Esszimmer Licht
         light.licht_2:
@@ -103,6 +107,8 @@ data:
         locale: de-DE
         filter:
           include_entities:
+            - switch.computer
+            - switch.weihnachtsbaum
             - light.licht
             - light.licht_2
             - light.licht_3
@@ -119,6 +125,12 @@ data:
             - cover.rolladen_9
             - cover.shutters
         entity_config:
+          switch.computer:
+            name: Computer
+            display_categories: SWITCH
+          switch.weihnachtsbaum:
+            name: Weihnachtsbaum
+            display_categories: SWITCH
           light.licht:
             name: Esszimmer Licht
             display_categories: LIGHT
