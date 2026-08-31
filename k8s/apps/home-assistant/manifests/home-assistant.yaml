@@ -108,6 +108,7 @@ data:
         filter:
           include_entities:
             - switch.computer
+            - switch.weihnachtsbaum
             - light.licht
             - light.licht_2
             - light.licht_3
