@@ -49,6 +49,8 @@ data:
       customize:
         switch.computer:
           friendly_name: Computer
+        switch.weihnachtsbaum:
+          friendly_name: Weihnachtsbaum
         light.licht:
           friendly_name: Esszimmer Licht
         light.licht_2:
@@ -124,6 +126,9 @@ data:
         entity_config:
           switch.computer:
             name: Computer
+            display_categories: SWITCH
+          switch.weihnachtsbaum:
+            name: Weihnachtsbaum
             display_categories: SWITCH
           light.licht:
             name: Esszimmer Licht
