@@ -12,6 +12,9 @@
   "prCreation": "immediate",
   "automerge": false,
   "automergeType": "pr",
+  "platformAutomerge": false,
+  "ignoreTests": false,
+  "rebaseWhen": "behind-base-branch",
   "argocd": {
     "managerFilePatterns": [
       "/k8s/apps/.+/application\\.yaml$/"
@@ -34,6 +37,18 @@
         "terraform"
       ],
       "groupName": "OpenTofu providers"
+    },
+    {
+      "description": "Automerge tested non-major dependency updates",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest",
+        "lockFileMaintenance"
+      ],
+      "automerge": true
     }
   ],
   "customManagers": [
@@ -48,6 +63,15 @@
       "depNameTemplate": "hacs/integration",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/\\.github/workflows/renovate-compatibility\\.yml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z_]+_VERSION: \\\"(?<currentValue>[^\\\"]+)\\\""
+      ]
     }
   ]
 }

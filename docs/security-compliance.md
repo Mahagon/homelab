@@ -99,6 +99,22 @@ CI produces reproducible evidence through:
 - Trivy IaC, image, and repository-wide secret scans.
 - Kubeconform schema validation.
 - Lambda authorization, error, timeout, and log-redaction unit tests.
+- Renovate-only compatibility checks that render changed Helm charts, validate
+  changed manifests against Kubernetes 1.36 schemas, and verify updated image
+  digests and `linux/amd64` availability.
+
+## Renovate compatibility and automerge
+
+Renovate patch, minor, pin, digest, and lock-file maintenance pull requests are
+eligible for automatic merge, including minor updates to pre-1.0 dependencies.
+Major and replacement updates always require manual review. There is no release
+age delay.
+
+Renovate performs the merge itself only after the branch is current with `main`
+and every reported check has finished successfully. Platform-native automerge
+is disabled so optional checks, including Socket Security, remain blocking for
+automated merges. Compatibility checks are static: they do not deploy to an
+ephemeral or production cluster and do not receive production credentials.
 
 OpenTofu input validations, resource preconditions, and test assertions are
 blocking. OpenTofu `check` blocks are supplementary cross-resource diagnostics;
