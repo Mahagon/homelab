@@ -72,6 +72,15 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z_]+_VERSION: \\\"(?<currentValue>[^\\\"]+)\\\""
       ]
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/\\.github/workflows/renovate-compatibility\\.yml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+RENOVATE_IMAGE: \\\"[^:\\\"]+:(?<currentValue>[^@\\\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\\\""
+      ]
     }
   ]
 }
