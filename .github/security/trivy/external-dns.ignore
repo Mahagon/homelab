@@ -1,0 +1,5 @@
+# Temporary exceptions scoped to registry.k8s.io/external-dns/external-dns.
+# Reviewed against v0.22.0 (external-dns chart 1.22.0) on 2026-09-11.
+# The vulnerable xDS server API is not exposed by this DNS controller; remove
+# this exception when upstream rebuilds with google.golang.org/grpc >= 1.83.2.
+CVE-2026-84445 exp:2026-10-11

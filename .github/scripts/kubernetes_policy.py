@@ -12,7 +12,6 @@ from typing import Iterable, cast
 
 import yaml
 
-
 YamlMap = dict[str, object]
 WORKLOAD_KINDS = {
     "Pod",
@@ -66,7 +65,9 @@ def documents(path: pathlib.Path) -> Iterable[tuple[YamlMap, str]]:
                 if not isinstance(value, str) or not key.endswith((".yaml", ".yml")):
                     continue
                 loaded_embedded = cast(Iterable[object], yaml.safe_load_all(value))
-                for embedded_index, loaded_document in enumerate(loaded_embedded, start=1):
+                for embedded_index, loaded_document in enumerate(
+                    loaded_embedded, start=1
+                ):
                     embedded = as_mapping(loaded_document)
                     if embedded:
                         metadata = as_mapping(embedded.get("metadata"))
@@ -115,7 +116,9 @@ def findings(paths: Iterable[pathlib.Path]) -> list[Finding]:
             resource, pod = entry
             pod_security = as_mapping(pod.get("securityContext"))
             if pod.get("automountServiceAccountToken") is not False:
-                result.append(Finding(resource, "*", "automount-service-account-token", source))
+                result.append(
+                    Finding(resource, "*", "automount-service-account-token", source)
+                )
 
             pod_seccomp = (
                 as_mapping(pod_security.get("seccompProfile")).get("type")
@@ -131,17 +134,27 @@ def findings(paths: Iterable[pathlib.Path]) -> list[Finding]:
                     if security.get("privileged") is True:
                         result.append(Finding(resource, name, "privileged", source))
                     if security.get("allowPrivilegeEscalation") is not False:
-                        result.append(Finding(resource, name, "allow-privilege-escalation", source))
+                        result.append(
+                            Finding(
+                                resource, name, "allow-privilege-escalation", source
+                            )
+                        )
                     if (
                         not pod_seccomp
                         and as_mapping(security.get("seccompProfile")).get("type")
                         != "RuntimeDefault"
                     ):
-                        result.append(Finding(resource, name, "seccomp-runtime-default", source))
+                        result.append(
+                            Finding(resource, name, "seccomp-runtime-default", source)
+                        )
                     if not pod_non_root and security.get("runAsNonRoot") is not True:
-                        result.append(Finding(resource, name, "run-as-non-root", source))
+                        result.append(
+                            Finding(resource, name, "run-as-non-root", source)
+                        )
                     if security.get("readOnlyRootFilesystem") is not True:
-                        result.append(Finding(resource, name, "read-only-root-filesystem", source))
+                        result.append(
+                            Finding(resource, name, "read-only-root-filesystem", source)
+                        )
                     capabilities = as_mapping(security.get("capabilities"))
                     dropped = {
                         item
@@ -149,7 +162,9 @@ def findings(paths: Iterable[pathlib.Path]) -> list[Finding]:
                         if isinstance(item, str)
                     }
                     if "ALL" not in dropped:
-                        result.append(Finding(resource, name, "drop-all-capabilities", source))
+                        result.append(
+                            Finding(resource, name, "drop-all-capabilities", source)
+                        )
     return sorted(result)
 
 
@@ -161,7 +176,14 @@ def load_exceptions(path: pathlib.Path, today: dt.date) -> set[tuple[str, str, s
     errors: list[str] = []
     for value in as_list(config.get("exceptions")):
         item = as_mapping(value)
-        required = ("resource", "container", "controls", "reason", "compensating_control", "expires")
+        required = (
+            "resource",
+            "container",
+            "controls",
+            "reason",
+            "compensating_control",
+            "expires",
+        )
         missing = [key for key in required if not item.get(key)]
         if missing:
             errors.append(f"exception is missing {', '.join(missing)}: {item}")
@@ -175,7 +197,9 @@ def load_exceptions(path: pathlib.Path, today: dt.date) -> set[tuple[str, str, s
             errors.append(f"exception has invalid expiry: {item}")
             continue
         if expiry < today:
-            errors.append(f"exception expired on {expiry}: {item['resource']} container={item['container']}")
+            errors.append(
+                f"exception expired on {expiry}: {item['resource']} container={item['container']}"
+            )
         resource = item["resource"]
         container = item["container"]
         if not isinstance(resource, str) or not isinstance(container, str):
@@ -194,7 +218,9 @@ def load_exceptions(path: pathlib.Path, today: dt.date) -> set[tuple[str, str, s
     return entries
 
 
-def validate(paths: Iterable[pathlib.Path], exception_path: pathlib.Path, today: dt.date) -> list[str]:
+def validate(
+    paths: Iterable[pathlib.Path], exception_path: pathlib.Path, today: dt.date
+) -> list[str]:
     """Return missing-hardening and stale-exception errors."""
     exceptions = load_exceptions(exception_path, today)
     used: set[tuple[str, str, str]] = set()
@@ -206,7 +232,9 @@ def validate(paths: Iterable[pathlib.Path], exception_path: pathlib.Path, today:
         else:
             errors.append(f"missing hardening or exception: {finding.label()}")
     for key in sorted(set(exceptions) - used):
-        errors.append(f"unused exception: resource={key[0]} container={key[1]} control={key[2]}")
+        errors.append(
+            f"unused exception: resource={key[0]} container={key[1]} control={key[2]}"
+        )
     return errors
 
 

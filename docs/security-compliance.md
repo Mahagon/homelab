@@ -139,10 +139,15 @@ remains blocking until it is reviewed; the allowlist is never generated or
 renewed automatically.
 
 The 2026-09-11 review also evaluated the open Renovate container updates:
-cloudflared 2026.9.0, Argo CD chart 10.8.4, and Renovate 44.79.6. The Argo CD
-chart renders the same Argo CD, Dex, and Redis image versions as chart 10.8.2.
-The Helm 4.3.0 and AWS provider 6.64.0 updates are executable/dependency updates,
-not container images, and therefore are outside the image allowlist.
+cloudflared 2026.9.0, Argo CD chart 10.8.4, Renovate 44.79.6, and external-dns
+chart 1.22.0. The Argo CD chart renders the same Argo CD, Dex, and Redis image
+versions as chart 10.8.2. External-dns v0.22.0 embeds the affected gRPC 1.83.1
+library, but the reported `CVE-2026-84445` denial of service requires the xDS
+server API, which this DNS controller does not expose. Its image-specific
+exception expires on 2026-10-11 and must be removed when upstream publishes an
+image built with gRPC 1.83.2 or newer. The Helm 4.3.0 and AWS provider 6.64.0
+updates are executable/dependency updates, not container images, and therefore
+are outside the image allowlist.
 
 ## Renovate compatibility and automerge
 

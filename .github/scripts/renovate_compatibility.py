@@ -14,7 +14,6 @@ from typing import Any, Callable, Iterable, Sequence
 
 import yaml
 
-
 PLACEHOLDERS = {
     "${DOMAIN}": "example.invalid",
     "${EMAIL}": "security@example.com",
@@ -68,7 +67,9 @@ def helm_sources(document: dict[str, Any]) -> list[HelmSource]:
     if isinstance(spec.get("source"), dict):
         candidates.append(spec["source"])
     if isinstance(spec.get("sources"), list):
-        candidates.extend(source for source in spec["sources"] if isinstance(source, dict))
+        candidates.extend(
+            source for source in spec["sources"] if isinstance(source, dict)
+        )
 
     result: list[HelmSource] = []
     for source in candidates:
@@ -80,7 +81,9 @@ def helm_sources(document: dict[str, Any]) -> list[HelmSource]:
             raise ValueError(f"Helm source is missing: {', '.join(missing)}")
         helm = source.get("helm") or {}
         if helm.get("valueFiles"):
-            raise ValueError("Helm valueFiles are not supported by the compatibility renderer")
+            raise ValueError(
+                "Helm valueFiles are not supported by the compatibility renderer"
+            )
         result.append(
             HelmSource(
                 application=str(metadata.get("name") or "application"),
@@ -113,7 +116,9 @@ def added_image_references(diff: str) -> list[str]:
     return sorted(references)
 
 
-def supports_platform(descriptor: dict[str, Any], os_name: str, architecture: str) -> bool:
+def supports_platform(
+    descriptor: dict[str, Any], os_name: str, architecture: str
+) -> bool:
     """Return whether an image descriptor supports the requested platform."""
     manifests = descriptor.get("manifests")
     if isinstance(manifests, list):
@@ -124,7 +129,9 @@ def supports_platform(descriptor: dict[str, Any], os_name: str, architecture: st
             if isinstance(manifest, dict)
         )
     platform = descriptor.get("platform") or descriptor
-    return platform.get("os") == os_name and platform.get("architecture") == architecture
+    return (
+        platform.get("os") == os_name and platform.get("architecture") == architecture
+    )
 
 
 def inspect_descriptor(reference: str, runner: CommandRunner = run) -> dict[str, Any]:
@@ -142,7 +149,9 @@ def inspect_descriptor(reference: str, runner: CommandRunner = run) -> dict[str,
     )
     descriptor = json.loads(output)
     if not isinstance(descriptor, dict):
-        raise ValueError(f"Image inspection returned an invalid descriptor for {reference}")
+        raise ValueError(
+            f"Image inspection returned an invalid descriptor for {reference}"
+        )
     return descriptor
 
 
@@ -240,12 +249,17 @@ def render_helm_sources(
     output.mkdir(parents=True, exist_ok=True)
     count = 0
     for path in application_paths:
-        if not path.as_posix().startswith("k8s/apps/") or path.name != "application.yaml":
+        if (
+            not path.as_posix().startswith("k8s/apps/")
+            or path.name != "application.yaml"
+        ):
             continue
         for index, source in enumerate(load_helm_sources(path), start=1):
             release = safe_name(f"{source.application}-{source.chart}")
             values_path = output / f"{release}-{index}-values.yaml"
-            values_path.write_text(substitute_placeholders(source.values), encoding="utf-8")
+            values_path.write_text(
+                substitute_placeholders(source.values), encoding="utf-8"
+            )
             command = [
                 "helm",
                 "template",
@@ -264,7 +278,9 @@ def render_helm_sources(
             if source.values:
                 command.extend(["--values", str(values_path)])
             rendered = runner(command)
-            (output / f"helm-{release}-{index}.yaml").write_text(rendered, encoding="utf-8")
+            (output / f"helm-{release}-{index}.yaml").write_text(
+                rendered, encoding="utf-8"
+            )
             values_path.unlink(missing_ok=True)
             count += 1
     return count
@@ -288,7 +304,9 @@ def main() -> int:
     raw_count = render_raw_manifests(paths, args.output)
     helm_count = render_helm_sources(paths, args.output, args.kubernetes_version)
 
-    diff = run(["git", "diff", "--unified=0", args.base, args.head, "--", "*.yaml", "*.yml"])
+    diff = run(
+        ["git", "diff", "--unified=0", args.base, args.head, "--", "*.yaml", "*.yml"]
+    )
     images = added_image_references(diff)
     for image in images:
         print(f"Inspecting {image}")
