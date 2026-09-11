@@ -23,7 +23,6 @@ from renovate_compatibility import (
     validate_image,
 )
 
-
 IMAGE_REFERENCE = re.compile(r"(?m)^[ \t]*(?:-\s*)?image:\s*[\"']?([^\s\"'#]+)")
 PINNED_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 DEFAULT_IGNORE = ".github/security/trivy/default.ignore"
@@ -31,6 +30,9 @@ IMAGE_IGNORE_FILES = {
     "cloudflare/cloudflared": ".github/security/trivy/cloudflared.ignore",
     "ghcr.io/renovatebot/renovate": ".github/security/trivy/renovate.ignore",
     "quay.io/argoproj/argocd": ".github/security/trivy/argocd.ignore",
+    "registry.k8s.io/external-dns/external-dns": (
+        ".github/security/trivy/external-dns.ignore"
+    ),
 }
 YamlMap = dict[str, object]
 
@@ -120,7 +122,9 @@ def validate_explicit_pin(reference: str) -> None:
         raise ValueError(f"Explicit image is not pinned by sha256 digest: {reference}")
     final_component = tagged.rsplit("/", 1)[-1]
     if ":" not in final_component:
-        raise ValueError(f"Explicit image does not include a human-readable tag: {reference}")
+        raise ValueError(
+            f"Explicit image does not include a human-readable tag: {reference}"
+        )
 
 
 def canonical_image(reference: str) -> str:
@@ -143,9 +147,7 @@ def ignore_file(reference: str) -> str:
     return IMAGE_IGNORE_FILES.get(canonical_image(reference), DEFAULT_IGNORE)
 
 
-def matrix_entries(
-    raw_images: set[str], helm_images: set[str]
-) -> list[dict[str, str]]:
+def matrix_entries(raw_images: set[str], helm_images: set[str]) -> list[dict[str, str]]:
     """Build deduplicated GitHub Actions matrix entries for image scans."""
     combined_sources: dict[str, set[str]] = {}
     for source, references in (("raw", raw_images), ("helm", helm_images)):
@@ -316,9 +318,7 @@ def inventory_changed(
     return raw_images, helm_images
 
 
-def inventory_all(
-    output: Path, kubernetes_version: str
-) -> tuple[set[str], set[str]]:
+def inventory_all(output: Path, kubernetes_version: str) -> tuple[set[str], set[str]]:
     """Inventory all raw and Helm-rendered deployed image references."""
     paths = all_kubernetes_yaml()
     raw_images = explicit_image_references(paths)
@@ -326,9 +326,7 @@ def inventory_all(
     sources: list[HelmSource] = []
     for path in application_paths(paths):
         sources.extend(helm_sources_from_text(path.read_text(encoding="utf-8")))
-    helm_images = render_sources(
-        sources, output / "head" / "helm", kubernetes_version
-    )
+    helm_images = render_sources(sources, output / "head" / "helm", kubernetes_version)
     return raw_images, helm_images
 
 

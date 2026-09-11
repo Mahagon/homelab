@@ -107,6 +107,16 @@ spec:
             inventory.IMAGE_IGNORE_FILES["ghcr.io/renovatebot/renovate"],
         )
 
+    def test_external_dns_uses_its_image_specific_allowlist(self) -> None:
+        """Select the external-dns allowlist for its rendered Helm image."""
+        external_dns = "registry.k8s.io/external-dns/external-dns:v0.22.0"
+        self.assertEqual(
+            inventory.ignore_file(external_dns),
+            inventory.IMAGE_IGNORE_FILES[
+                "registry.k8s.io/external-dns/external-dns"
+            ],
+        )
+
     def test_matrix_prefers_a_pinned_copy_of_the_same_tag(self) -> None:
         """Prefer an immutable reference when raw and Helm tags overlap."""
         pinned = "quay.io/example/app:v1@sha256:" + "a" * 64

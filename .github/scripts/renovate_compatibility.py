@@ -10,10 +10,9 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from typing import Callable, Iterable, Sequence, cast
 
 import yaml
-
 
 PLACEHOLDERS = {
     "${DOMAIN}": "example.invalid",
@@ -21,6 +20,22 @@ PLACEHOLDERS = {
 }
 ADDED_IMAGE = re.compile(r"^\+(?!\+\+).*?\bimage:\s*[\"']?([^\s\"'#]+)")
 CommandRunner = Callable[[Sequence[str]], str]
+YamlMap = dict[str, object]
+
+
+def as_mapping(value: object) -> YamlMap:
+    """Return a string-keyed mapping or an empty mapping."""
+    if not isinstance(value, dict):
+        return {}
+    mapping = cast(dict[object, object], value)
+    return {key: item for key, item in mapping.items() if isinstance(key, str)}
+
+
+def as_list(value: object) -> list[object]:
+    """Return a sequence as explicitly object-typed values."""
+    if not isinstance(value, list):
+        return []
+    return cast(list[object], value)
 
 
 @dataclass(frozen=True)
@@ -56,19 +71,24 @@ def substitute_placeholders(value: str) -> str:
     return value
 
 
-def helm_sources(document: dict[str, Any]) -> list[HelmSource]:
+def helm_sources(document: object) -> list[HelmSource]:
     """Extract renderable Helm sources from an Argo CD Application."""
+    document = as_mapping(document)
     if document.get("kind") != "Application":
         return []
 
-    metadata = document.get("metadata") or {}
-    spec = document.get("spec") or {}
-    destination = spec.get("destination") or {}
-    candidates: list[dict[str, Any]] = []
-    if isinstance(spec.get("source"), dict):
-        candidates.append(spec["source"])
-    if isinstance(spec.get("sources"), list):
-        candidates.extend(source for source in spec["sources"] if isinstance(source, dict))
+    metadata = as_mapping(document.get("metadata"))
+    spec = as_mapping(document.get("spec"))
+    destination = as_mapping(spec.get("destination"))
+    candidates: list[YamlMap] = []
+    source = as_mapping(spec.get("source"))
+    if source:
+        candidates.append(source)
+    candidates.extend(
+        candidate
+        for value in as_list(spec.get("sources"))
+        if (candidate := as_mapping(value))
+    )
 
     result: list[HelmSource] = []
     for source in candidates:
@@ -78,9 +98,11 @@ def helm_sources(document: dict[str, Any]) -> list[HelmSource]:
         missing = [key for key in required if not source.get(key)]
         if missing:
             raise ValueError(f"Helm source is missing: {', '.join(missing)}")
-        helm = source.get("helm") or {}
+        helm = as_mapping(source.get("helm"))
         if helm.get("valueFiles"):
-            raise ValueError("Helm valueFiles are not supported by the compatibility renderer")
+            raise ValueError(
+                "Helm valueFiles are not supported by the compatibility renderer"
+            )
         result.append(
             HelmSource(
                 application=str(metadata.get("name") or "application"),
@@ -97,9 +119,11 @@ def helm_sources(document: dict[str, Any]) -> list[HelmSource]:
 def load_helm_sources(path: Path) -> list[HelmSource]:
     """Load every renderable Helm source declared in a YAML file."""
     sources: list[HelmSource] = []
-    for document in yaml.safe_load_all(path.read_text(encoding="utf-8")):
-        if isinstance(document, dict):
-            sources.extend(helm_sources(document))
+    documents = cast(
+        Iterable[object], yaml.safe_load_all(path.read_text(encoding="utf-8"))
+    )
+    for document in documents:
+        sources.extend(helm_sources(document))
     return sources
 
 
@@ -113,21 +137,27 @@ def added_image_references(diff: str) -> list[str]:
     return sorted(references)
 
 
-def supports_platform(descriptor: dict[str, Any], os_name: str, architecture: str) -> bool:
+def supports_platform(
+    descriptor: YamlMap, os_name: str, architecture: str
+) -> bool:
     """Return whether an image descriptor supports the requested platform."""
-    manifests = descriptor.get("manifests")
-    if isinstance(manifests, list):
+    manifests_value = descriptor.get("manifests")
+    if isinstance(manifests_value, list):
+        manifests = cast(list[object], manifests_value)
         return any(
-            manifest.get("platform", {}).get("os") == os_name
-            and manifest.get("platform", {}).get("architecture") == architecture
-            for manifest in manifests
-            if isinstance(manifest, dict)
+            platform.get("os") == os_name
+            and platform.get("architecture") == architecture
+            for value in manifests
+            if (manifest := as_mapping(value))
+            if (platform := as_mapping(manifest.get("platform")))
         )
-    platform = descriptor.get("platform") or descriptor
-    return platform.get("os") == os_name and platform.get("architecture") == architecture
+    platform = as_mapping(descriptor.get("platform")) or descriptor
+    return (
+        platform.get("os") == os_name and platform.get("architecture") == architecture
+    )
 
 
-def inspect_descriptor(reference: str, runner: CommandRunner = run) -> dict[str, Any]:
+def inspect_descriptor(reference: str, runner: CommandRunner = run) -> YamlMap:
     """Inspect and decode an image manifest descriptor."""
     output = runner(
         [
@@ -140,13 +170,15 @@ def inspect_descriptor(reference: str, runner: CommandRunner = run) -> dict[str,
             "{{json .Manifest}}",
         ]
     )
-    descriptor = json.loads(output)
-    if not isinstance(descriptor, dict):
-        raise ValueError(f"Image inspection returned an invalid descriptor for {reference}")
-    return descriptor
+    decoded = cast(object, json.loads(output))
+    if not isinstance(decoded, dict):
+        raise ValueError(
+            f"Image inspection returned an invalid descriptor for {reference}"
+        )
+    return as_mapping(cast(object, decoded))
 
 
-def inspect_image_config(reference: str, runner: CommandRunner = run) -> dict[str, Any]:
+def inspect_image_config(reference: str, runner: CommandRunner = run) -> YamlMap:
     """Return config metadata used to identify a single-platform manifest."""
     output = runner(
         [
@@ -159,10 +191,10 @@ def inspect_image_config(reference: str, runner: CommandRunner = run) -> dict[st
             "{{json .Image}}",
         ]
     )
-    image = json.loads(output)
-    if not isinstance(image, dict):
+    decoded = cast(object, json.loads(output))
+    if not isinstance(decoded, dict):
         raise ValueError(f"Image inspection returned invalid config for {reference}")
-    return image
+    return as_mapping(cast(object, decoded))
 
 
 def validate_image(
@@ -240,12 +272,17 @@ def render_helm_sources(
     output.mkdir(parents=True, exist_ok=True)
     count = 0
     for path in application_paths:
-        if not path.as_posix().startswith("k8s/apps/") or path.name != "application.yaml":
+        if (
+            not path.as_posix().startswith("k8s/apps/")
+            or path.name != "application.yaml"
+        ):
             continue
         for index, source in enumerate(load_helm_sources(path), start=1):
             release = safe_name(f"{source.application}-{source.chart}")
             values_path = output / f"{release}-{index}-values.yaml"
-            values_path.write_text(substitute_placeholders(source.values), encoding="utf-8")
+            values_path.write_text(
+                substitute_placeholders(source.values), encoding="utf-8"
+            )
             command = [
                 "helm",
                 "template",
@@ -264,7 +301,9 @@ def render_helm_sources(
             if source.values:
                 command.extend(["--values", str(values_path)])
             rendered = runner(command)
-            (output / f"helm-{release}-{index}.yaml").write_text(rendered, encoding="utf-8")
+            (output / f"helm-{release}-{index}.yaml").write_text(
+                rendered, encoding="utf-8"
+            )
             values_path.unlink(missing_ok=True)
             count += 1
     return count
@@ -288,7 +327,9 @@ def main() -> int:
     raw_count = render_raw_manifests(paths, args.output)
     helm_count = render_helm_sources(paths, args.output, args.kubernetes_version)
 
-    diff = run(["git", "diff", "--unified=0", args.base, args.head, "--", "*.yaml", "*.yml"])
+    diff = run(
+        ["git", "diff", "--unified=0", args.base, args.head, "--", "*.yaml", "*.yml"]
+    )
     images = added_image_references(diff)
     for image in images:
         print(f"Inspecting {image}")
