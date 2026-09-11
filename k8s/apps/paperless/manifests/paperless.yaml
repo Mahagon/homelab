@@ -47,6 +47,11 @@ spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -54,6 +59,7 @@ spec:
           image: ghcr.io/paperless-ngx/paperless-ngx:3.1@sha256:aa810a36942c63d4ee70d00eda7236cd3d6acfb7eb3f7987fb568ed14df8817a
           securityContext:
             allowPrivilegeEscalation: false
+            runAsNonRoot: true
             capabilities:
               drop:
                 - ALL
