@@ -69,9 +69,9 @@ exceptions:
     expires: 2027-03-11
   - resource: Deployment/paperless/paperless
     container: paperless
-    controls: [read-only-root-filesystem, run-as-non-root]
-    reason: The upstream image writes application state and uses its packaged user initialization.
-    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    controls: [read-only-root-filesystem]
+    reason: The upstream image and s6 init system write application and runtime state to packaged filesystem paths.
+    compensating_control: The container runs as UID/GID 1000 with no service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
     expires: 2027-03-11
   - resource: Deployment/redis/redis
     container: redis
