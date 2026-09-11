@@ -50,12 +50,14 @@ def run(command: Sequence[str]) -> str:
 
 
 def substitute_placeholders(value: str) -> str:
+    """Replace known deployment placeholders with schema-safe test values."""
     for placeholder, replacement in PLACEHOLDERS.items():
         value = value.replace(placeholder, replacement)
     return value
 
 
 def helm_sources(document: dict[str, Any]) -> list[HelmSource]:
+    """Extract renderable Helm sources from an Argo CD Application."""
     if document.get("kind") != "Application":
         return []
 
@@ -93,6 +95,7 @@ def helm_sources(document: dict[str, Any]) -> list[HelmSource]:
 
 
 def load_helm_sources(path: Path) -> list[HelmSource]:
+    """Load every renderable Helm source declared in a YAML file."""
     sources: list[HelmSource] = []
     for document in yaml.safe_load_all(path.read_text(encoding="utf-8")):
         if isinstance(document, dict):
@@ -101,6 +104,7 @@ def load_helm_sources(path: Path) -> list[HelmSource]:
 
 
 def added_image_references(diff: str) -> list[str]:
+    """Return unique image references added by a unified diff."""
     references = {
         match.group(1)
         for line in diff.splitlines()
@@ -110,6 +114,7 @@ def added_image_references(diff: str) -> list[str]:
 
 
 def supports_platform(descriptor: dict[str, Any], os_name: str, architecture: str) -> bool:
+    """Return whether an image descriptor supports the requested platform."""
     manifests = descriptor.get("manifests")
     if isinstance(manifests, list):
         return any(
@@ -118,11 +123,12 @@ def supports_platform(descriptor: dict[str, Any], os_name: str, architecture: st
             for manifest in manifests
             if isinstance(manifest, dict)
         )
-    platform = descriptor.get("platform") or {}
+    platform = descriptor.get("platform") or descriptor
     return platform.get("os") == os_name and platform.get("architecture") == architecture
 
 
 def inspect_descriptor(reference: str, runner: CommandRunner = run) -> dict[str, Any]:
+    """Inspect and decode an image manifest descriptor."""
     output = runner(
         [
             "docker",
@@ -140,10 +146,41 @@ def inspect_descriptor(reference: str, runner: CommandRunner = run) -> dict[str,
     return descriptor
 
 
-def validate_image(reference: str, runner: CommandRunner = run) -> None:
+def inspect_image_config(reference: str, runner: CommandRunner = run) -> dict[str, Any]:
+    """Return config metadata used to identify a single-platform manifest."""
+    output = runner(
+        [
+            "docker",
+            "buildx",
+            "imagetools",
+            "inspect",
+            reference,
+            "--format",
+            "{{json .Image}}",
+        ]
+    )
+    image = json.loads(output)
+    if not isinstance(image, dict):
+        raise ValueError(f"Image inspection returned invalid config for {reference}")
+    return image
+
+
+def validate_image(
+    reference: str,
+    runner: CommandRunner = run,
+    *,
+    require_tag_match: bool = True,
+) -> None:
+    """Validate image availability, platform support, digest, and optional tag."""
     descriptor = inspect_descriptor(reference, runner)
-    if not supports_platform(descriptor, "linux", "amd64"):
-        raise ValueError(f"{reference} does not provide a linux/amd64 image")
+    platform_descriptor = descriptor
+    if not isinstance(descriptor.get("manifests"), list):
+        platform_descriptor = inspect_image_config(reference, runner)
+    if not supports_platform(platform_descriptor, "linux", "amd64"):
+        raise ValueError(
+            f"{reference} does not provide a linux/amd64 image; "
+            f"reported platform metadata: {platform_descriptor!r}"
+        )
 
     tagged_reference, separator, pinned_digest = reference.partition("@")
     if not separator:
@@ -155,7 +192,7 @@ def validate_image(reference: str, runner: CommandRunner = run) -> None:
         )
 
     final_component = tagged_reference.rsplit("/", 1)[-1]
-    if ":" not in final_component:
+    if not require_tag_match or ":" not in final_component:
         return
     tag_descriptor = inspect_descriptor(tagged_reference, runner)
     if tag_descriptor.get("digest") != pinned_digest:
@@ -166,11 +203,13 @@ def validate_image(reference: str, runner: CommandRunner = run) -> None:
 
 
 def changed_files(base: str, head: str, runner: CommandRunner = run) -> list[Path]:
+    """Return added, copied, modified, or renamed files between revisions."""
     output = runner(["git", "diff", "--name-only", "--diff-filter=ACMR", base, head])
     return [Path(line) for line in output.splitlines() if line]
 
 
 def render_raw_manifests(paths: Iterable[Path], output: Path) -> int:
+    """Render changed raw manifests with safe placeholder substitutions."""
     output.mkdir(parents=True, exist_ok=True)
     count = 0
     for path in paths:
@@ -187,6 +226,7 @@ def render_raw_manifests(paths: Iterable[Path], output: Path) -> int:
 
 
 def safe_name(value: str) -> str:
+    """Convert a value into a bounded Kubernetes-compatible name fragment."""
     return re.sub(r"[^a-z0-9-]+", "-", value.lower()).strip("-")[:53] or "application"
 
 
@@ -196,6 +236,7 @@ def render_helm_sources(
     kubernetes_version: str,
     runner: CommandRunner = run,
 ) -> int:
+    """Render Helm sources referenced by the provided Application paths."""
     output.mkdir(parents=True, exist_ok=True)
     count = 0
     for path in application_paths:
@@ -230,6 +271,7 @@ def render_helm_sources(
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", required=True)
     parser.add_argument("--head", required=True)
@@ -239,6 +281,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Validate Renovate changes for rendering and image compatibility."""
     args = parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     paths = changed_files(args.base, args.head)

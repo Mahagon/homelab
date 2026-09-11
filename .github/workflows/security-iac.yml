@@ -7,13 +7,16 @@ on:
       - main
     paths:
       - ".github/workflows/**"
+      - ".github/scripts/**"
+      - ".github/security/**"
       - ".checkov.yml"
       - ".tflint.hcl"
+      - ".trivyignore"
       - "butane/**"
       - "infrastructure/**"
-      - "k8s/apps/cloudflared/**"
-      - "k8s/apps/external-dns/**"
-      - "k8s/apps/home-assistant/**"
+      - "k8s/**"
+  schedule:
+    - cron: "37 3 * * 1"
   workflow_dispatch:
     inputs:
       apply:
@@ -41,45 +44,26 @@ jobs:
     timeout-minutes: 5
     outputs:
       deploy: ${{ steps.detect.outputs.deploy }}
-      cloudflared-image: ${{ steps.detect.outputs.cloudflared-image }}
     steps:
       - name: Check out repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Detect workflow changes
+      - name: Detect deployable changes
         id: detect
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REQUESTED_APPLY: ${{ inputs.apply }}
         run: |
           set -euo pipefail
           deploy=false
-          cloudflared_image=""
-
-          image_at_revision() {
-            local revision="$1"
-            local manifest="k8s/apps/cloudflared/manifests/cloudflared.yaml"
-            git show "${revision}:${manifest}" 2>/dev/null |
-              awk '$1 == "image:" { print $2; exit }' || true
-          }
 
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             deploy="${REQUESTED_APPLY}"
-            cloudflared_image="$(image_at_revision "${GITHUB_SHA}")"
-          elif [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            base_image="$(image_at_revision "${PR_BASE_SHA}")"
-            head_image="$(image_at_revision "${PR_HEAD_SHA}")"
-            if [[ -n "${head_image}" && "${head_image}" != "${base_image}" ]]; then
-              cloudflared_image="${head_image}"
-            fi
           elif [[ "${EVENT_NAME}" == "push" ]]; then
-            cloudflared_image="$(image_at_revision "${GITHUB_SHA}")"
             base="${BEFORE_SHA}"
             if [[ -z "${base}" || "${base}" == "0000000000000000000000000000000000000000" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
               base="$(git rev-parse "${GITHUB_SHA}^")"
@@ -92,7 +76,97 @@ jobs:
           fi
 
           echo "deploy=${deploy}" >> "${GITHUB_OUTPUT}"
-          echo "cloudflared-image=${cloudflared_image}" >> "${GITHUB_OUTPUT}"
+
+  inventory:
+    name: Deployed image inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      images: ${{ steps.inventory.outputs.images }}
+    env:
+      KUBERNETES_VERSION: "1.36.3"
+      HELM_VERSION: "v4.2.4"
+      PYYAML_VERSION: "6.0.3"
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install inventory dependencies
+        run: python -m pip install --disable-pip-version-check "PyYAML==${PYYAML_VERSION}"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Test Kubernetes tooling
+        run: python -m unittest discover -s .github/scripts/tests -p "test_*.py" -v
+
+      - name: Enforce owned workload runtime policy
+        run: python .github/scripts/kubernetes_policy.py
+
+      - name: Build deployed image inventory
+        id: inventory
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mode=all
+          base=""
+          head="${GITHUB_SHA}"
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            mode=changed
+            base="${PR_BASE_SHA}"
+            head="${PR_HEAD_SHA}"
+          elif [[ "${EVENT_NAME}" == "push" ]]; then
+            mode=changed
+            base="${BEFORE_SHA}"
+            if [[ -z "${base}" || "${base}" == "0000000000000000000000000000000000000000" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+              base="$(git rev-parse "${GITHUB_SHA}^")"
+            fi
+          fi
+
+          args=(
+            --mode "${mode}"
+            --head "${head}"
+            --output .rendered/security
+            --matrix-output .rendered/security/images.json
+            --github-output "${GITHUB_OUTPUT}"
+            --kubernetes-version "${KUBERNETES_VERSION}"
+          )
+          if [[ "${mode}" == "changed" ]]; then
+            args+=(--base "${base}")
+          fi
+          python .github/scripts/kubernetes_inventory.py "${args[@]}"
+
+      - name: Validate rendered Kubernetes resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find .rendered/security/head -type f -name '*.yaml' -print -quit | grep -q .; then
+            docker run --rm \
+              --volume "${PWD}/.rendered/security/head:/work:ro" \
+              ghcr.io/yannh/kubeconform@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c \
+              -strict \
+              -summary \
+              -ignore-missing-schemas \
+              -kubernetes-version "${KUBERNETES_VERSION}" \
+              /work
+          else
+            echo "No changed Kubernetes resources require schema validation."
+          fi
 
   opentofu:
     name: OpenTofu and Lambda
@@ -154,16 +228,8 @@ jobs:
           --directory infrastructure/opentofu/home-assistant-alexa
           --framework terraform
 
-      - name: Check cloudflared workload security
-        run: >-
-          checkov
-          --directory k8s/apps/cloudflared/manifests
-          --framework kubernetes
-
-
-  kubernetes:
-    name: Kubernetes and secret scanning
-    needs: changes
+  kubernetes_checks:
+    name: Kubernetes configuration and secrets
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -240,27 +306,13 @@ jobs:
           exit-code: "1"
           hide-progress: true
 
-      - name: Scan cloudflared manifests
+      - name: Scan the cloudflared network boundary
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.74.0
           scan-type: config
           scan-ref: k8s/apps/cloudflared/manifests
           severity: HIGH,CRITICAL
-          exit-code: "1"
-          hide-progress: true
-
-
-      - name: Scan cloudflared image
-        if: needs.changes.outputs.cloudflared-image != ''
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.74.0
-          scan-type: image
-          image-ref: ${{ needs.changes.outputs.cloudflared-image }}
-          trivyignores: .trivyignore
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
           exit-code: "1"
           hide-progress: true
 
@@ -275,6 +327,109 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           hide-progress: true
+
+  image_scan_pr:
+    name: PR image scan (${{ matrix.target.image }})
+    needs: inventory
+    if: github.event_name == 'pull_request' && needs.inventory.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        target: ${{ fromJSON(needs.inventory.outputs.images) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Scan changed image without publishing details
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: image
+          image-ref: ${{ matrix.target.image }}
+          trivyignores: ${{ matrix.target.ignorefile }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results.sarif
+          limit-severities-for-sarif: true
+          exit-code: "1"
+          hide-progress: true
+
+      - name: Explain local remediation
+        if: failure()
+        env:
+          IMAGE: ${{ matrix.target.image }}
+        run: echo "The changed image failed the vulnerability policy. Run Trivy against ${IMAGE} locally for details."
+
+  image_scan_trusted:
+    name: Trusted image scan (${{ matrix.target.image }})
+    needs: inventory
+    if: github.event_name != 'pull_request' && needs.inventory.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        target: ${{ fromJSON(needs.inventory.outputs.images) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Scan deployed image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: image
+          image-ref: ${{ matrix.target.image }}
+          trivyignores: ${{ matrix.target.ignorefile }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results.sarif
+          limit-severities-for-sarif: true
+          exit-code: "1"
+          hide-progress: true
+
+      - name: Publish findings to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@311b4ee155dcdab395044f00946f664bd51ff173 # v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-container/${{ matrix.target.category }}
+
+  kubernetes:
+    name: Kubernetes and secret scanning
+    if: always()
+    needs:
+      - inventory
+      - kubernetes_checks
+      - image_scan_pr
+      - image_scan_trusted
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all applicable security checks
+        shell: bash
+        env:
+          INVENTORY_RESULT: ${{ needs.inventory.result }}
+          KUBERNETES_RESULT: ${{ needs.kubernetes_checks.result }}
+          PR_SCAN_RESULT: ${{ needs.image_scan_pr.result }}
+          TRUSTED_SCAN_RESULT: ${{ needs.image_scan_trusted.result }}
+        run: |
+          set -euo pipefail
+          [[ "${INVENTORY_RESULT}" == "success" ]]
+          [[ "${KUBERNETES_RESULT}" == "success" ]]
+          [[ "${PR_SCAN_RESULT}" == "success" || "${PR_SCAN_RESULT}" == "skipped" ]]
+          [[ "${TRUSTED_SCAN_RESULT}" == "success" || "${TRUSTED_SCAN_RESULT}" == "skipped" ]]
 
   apply:
     name: Plan and apply production

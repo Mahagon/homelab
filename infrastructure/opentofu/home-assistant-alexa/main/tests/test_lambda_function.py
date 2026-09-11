@@ -21,20 +21,25 @@ lambda_function = importlib.import_module("lambda_function")
 
 class FakeResponse:
     def __init__(self, body: dict | bytes, status: int = 200):
+        """Initialize a fake HTTP response body and status."""
         self.body = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.status = status
 
     def __enter__(self):
+        """Return this response from a context manager."""
         return self
 
     def __exit__(self, *_args):
+        """Leave the context manager without suppressing exceptions."""
         return False
 
     def read(self, _limit: int) -> bytes:
+        """Return the configured response body."""
         return self.body
 
 
 def discovery_event(token: str | None = "secret-discovery-token") -> dict:
+    """Build a representative Alexa discovery directive."""
     scope = {"type": "BearerToken"}
     if token is not None:
         scope["token"] = token
@@ -52,6 +57,7 @@ def discovery_event(token: str | None = "secret-discovery-token") -> dict:
 
 
 def control_event(token: str = "secret-control-token") -> dict:
+    """Build a representative Alexa endpoint-control directive."""
     return {
         "directive": {
             "header": {
@@ -75,6 +81,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_discovery_forwards_to_home_assistant(self, urlopen):
+        """Forward discovery directives with authorization and timeout."""
         expected = {"event": {"header": {"name": "Discover.Response"}, "payload": {"endpoints": []}}}
         urlopen.return_value = FakeResponse(expected)
 
@@ -88,6 +95,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_control_token_is_read_from_endpoint_scope(self, urlopen):
+        """Read control authorization from the endpoint scope."""
         expected = {"event": {"header": {"name": "Response"}, "payload": {}}}
         urlopen.return_value = FakeResponse(expected)
 
@@ -99,6 +107,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_missing_token_is_rejected_without_origin_call(self, urlopen):
+        """Reject missing authorization before contacting Home Assistant."""
         actual = lambda_function.lambda_handler(discovery_event(token=None), self.context)
 
         self.assertEqual("INVALID_AUTHORIZATION_CREDENTIAL", actual["event"]["payload"]["type"])
@@ -106,6 +115,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_payload_v2_is_rejected(self, urlopen):
+        """Reject unsupported Alexa payload versions."""
         event = discovery_event()
         event["directive"]["header"]["payloadVersion"] = "2"
 
@@ -116,6 +126,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_unauthorized_origin_maps_to_authorization_error(self, urlopen):
+        """Map origin authorization failures to Alexa authorization errors."""
         urlopen.side_effect = HTTPError("https://example", 401, "Unauthorized", {}, io.BytesIO())
 
         actual = lambda_function.lambda_handler(control_event(), self.context)
@@ -125,6 +136,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_unreachable_origin_maps_to_endpoint_unreachable(self, urlopen):
+        """Map origin connection failures to endpoint-unreachable errors."""
         urlopen.side_effect = URLError("timeout")
 
         actual = lambda_function.lambda_handler(control_event(), self.context)
@@ -133,6 +145,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_oversized_origin_response_is_rejected(self, urlopen):
+        """Reject origin responses exceeding the configured size limit."""
         urlopen.return_value = FakeResponse(b"x" * (lambda_function.MAX_PAYLOAD_BYTES + 1))
 
         actual = lambda_function.lambda_handler(control_event(), self.context)
@@ -141,6 +154,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
     @mock.patch.object(lambda_function.urllib.request, "urlopen")
     def test_access_token_is_never_logged(self, urlopen):
+        """Keep bearer tokens out of application logs."""
         token = "do-not-log-this-token"
         urlopen.return_value = FakeResponse({"event": {"payload": {}}})
 

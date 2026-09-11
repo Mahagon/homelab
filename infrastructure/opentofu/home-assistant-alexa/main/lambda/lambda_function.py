@@ -34,12 +34,14 @@ TLS_CONTEXT.minimum_version = ssl.TLSVersion.TLSv1_2
 
 
 def _directive(event: Any) -> dict[str, Any]:
+    """Extract and validate the Alexa directive object."""
     if not isinstance(event, dict) or not isinstance(event.get("directive"), dict):
         raise ValueError("Missing directive")
     return event["directive"]
 
 
 def _header(directive: dict[str, Any]) -> dict[str, Any]:
+    """Extract and validate the Alexa Smart Home v3 header."""
     header = directive.get("header")
     if not isinstance(header, dict):
         raise ValueError("Missing directive header")
@@ -51,6 +53,7 @@ def _header(directive: dict[str, Any]) -> dict[str, Any]:
 
 
 def _bearer_token(directive: dict[str, Any]) -> str:
+    """Extract a non-empty bearer token from the directive scopes."""
     scopes = []
     endpoint = directive.get("endpoint")
     payload = directive.get("payload")
@@ -69,6 +72,7 @@ def _bearer_token(directive: dict[str, Any]) -> str:
 
 
 def _error_response(event: Any, error_type: str, message: str) -> dict[str, Any]:
+    """Build an Alexa error response while preserving safe request context."""
     response_header: dict[str, Any] = {
         "namespace": "Alexa",
         "name": "ErrorResponse",
@@ -99,6 +103,7 @@ def _error_response(event: Any, error_type: str, message: str) -> dict[str, Any]
 
 
 def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
+    """Forward a validated Alexa directive to Home Assistant."""
     started = time.monotonic()
 
     try:

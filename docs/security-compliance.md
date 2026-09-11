@@ -1,8 +1,8 @@
 # Security baseline and CIS evidence
 
 This project uses CIS benchmarks as control catalogs, not as a certification
-claim. The selected profile is cost-aware and scoped to the new Alexa,
-Cloudflare Tunnel, and OpenTofu resources.
+claim. The selected profile is cost-aware and covers the repository's AWS,
+Kubernetes, Cloudflare Tunnel, and OpenTofu resources.
 
 - AWS reference: [CIS AWS Foundations Benchmark v5.0.0](https://docs.aws.amazon.com/securityhub/latest/userguide/cis-aws-foundations-benchmark.html)
 - K3s reference: [CIS Kubernetes Benchmark v1.12 self-assessment for K3s v1.32-v1.36](https://docs.k3s.io/security/self-assessment-1.12)
@@ -33,21 +33,21 @@ Because the deferred controls are material, documentation and CI must say
 
 ## K3s CIS v1.12 workload baseline
 
-| Workload control | Status | New cloudflared implementation |
+| Workload control | Status | Implementation |
 |---|---|---|
-| Namespace boundaries | Implemented | Dedicated `cloudflared` namespace. |
-| Pod Security Admission | Implemented | `restricted` enforce, audit, and warn labels apply only to this namespace. |
-| Service-account minimization | Implemented | Dedicated account with no RBAC grants and token automount disabled on both account and Pod. |
-| Privilege escalation | Implemented | Disabled. |
-| Linux capabilities | Implemented | Drop `ALL`; no additions. |
-| Root execution | Implemented | Fixed non-root UID/GID 65532. |
-| Seccomp | Implemented | `RuntimeDefault` at Pod level. |
-| Root filesystem | Implemented | Read-only with a size-limited `/tmp` `emptyDir`. |
-| Host namespaces | Implemented | No host network, PID, or IPC access. |
+| Namespace boundaries | Implemented | Applications use dedicated namespaces; cluster controllers remain in `kube-system` or their chart namespace. |
+| Pod Security Admission | Implemented | Compatible application namespaces enforce `baseline` and audit/warn `restricted`; elevated namespaces audit/warn `restricted`. Cloudflared enforces `restricted`. |
+| Service-account minimization | Implemented with exceptions | Repo-owned application Pods disable token automount. Controllers that call the Kubernetes API use dedicated service accounts and scoped RBAC. |
+| Privilege escalation | Implemented with exception | Disabled on owned workloads except the documented privileged Jellyfin container. |
+| Linux capabilities | Implemented with exceptions | Owned workloads drop `ALL`; Home Assistant adds only `NET_ADMIN` and `NET_RAW`, and Jellyfin retains its privileged GPU exception. |
+| Root execution | Partial | Cloudflared is fixed to UID/GID 65532. Workloads whose upstream initialization or host-volume access requires root have time-bounded exceptions. |
+| Seccomp | Implemented with exception | Owned workloads use `RuntimeDefault`; Jellyfin has a time-bounded hardware-access exception. |
+| Root filesystem | Partial | Controllers and simple workloads use read-only roots where safe; stateful applications have explicit, reviewed exceptions. |
+| Host namespaces | Implemented with exception | Home Assistant retains `hostNetwork` for local-device discovery; owned workloads do not use host PID or IPC. |
 | Resource governance | Implemented | CPU/memory requests and limits, fixed replica count, and no autoscaler. |
 | Network segmentation | Configured, pending node enablement | Cloudflared namespace default-deny with separate DNS, tunnel 7844, and Home Assistant 8123 egress policies; K3s must run without `--disable-network-policy true`. |
 | Secret handling | Partial | Token is a read-only Secret mount and never stored in Git; K3s secrets-at-rest encryption is outside this scope. |
-| Image provenance | Partial | Immutable digest and Renovate tracking; no admission-time signature verification. |
+| Image provenance | Partial | Explicit workload images use readable tags plus immutable digests and Renovate tracking; rendered Helm images are inventoried and scanned, but admission-time signature verification is not enabled. |
 | Availability | Implemented | Two connectors, readiness/liveness probes, rolling update, and PDB. Both replicas share one physical node. |
 
 The K3s network-policy controller is enabled because otherwise the new policies
@@ -59,11 +59,17 @@ have no effect. No default-deny policy is applied to existing namespaces.
   discovery. It cannot enter a `restricted` namespace without redesigning that
   discovery path.
 - Jellyfin currently runs privileged for its hardware/media requirements.
+- Backup jobs require root-readable volumes and writable Restic/PostgreSQL client
+  state. The local-path provisioner and helper require API or host-volume access.
+- Grafana Alloy requires host log mounts. Helm controllers that call the
+  Kubernetes API retain their chart-managed service-account tokens and RBAC.
 - Cluster-wide secrets encryption, audit logging, EventRateLimit, and a complete
   CIS node self-assessment are not changed by this project.
 
-These exceptions must remain visible in reports. Do not add broad scanner
-ignores that make the whole repository appear compliant.
+Owned-workload exceptions are recorded in
+`.github/security/kubernetes-exceptions.yaml`. CI rejects expired, stale, or
+unused entries. Do not add broad scanner ignores that make the whole repository
+appear compliant.
 
 ## Cloud and application threat controls
 
@@ -95,13 +101,29 @@ CI produces reproducible evidence through:
 
 - `tofu fmt`, `validate`, and mocked `tofu test` suites.
 - TFLint AWS rules.
-- Checkov on the new OpenTofu and cloudflared resources.
-- Trivy IaC, image, and repository-wide secret scans.
-- Kubeconform schema validation.
+- Checkov on OpenTofu resources.
+- A repository-owned runtime policy over all raw workload manifests, including
+  embedded storage helper Pods, with time-bounded per-container exceptions.
+- Trivy IaC, deployed-image, and repository-wide secret scans. The deployed
+  inventory includes explicit raw-manifest images and images discovered by
+  rendering every Argo CD Helm source.
+- Kubeconform schema validation of raw and rendered Helm resources.
 - Lambda authorization, error, timeout, and log-redaction unit tests.
 - Renovate-only compatibility checks that render changed Helm charts, validate
   changed manifests against Kubernetes 1.36 schemas, and verify updated image
   digests and `linux/amd64` availability.
+
+On pull requests, only image references introduced or changed relative to the
+base revision are vulnerability-scanned. The required check reports only which
+image failed and does not upload or print the SARIF details. Pushes to `main`,
+manual runs, and the Monday scheduled run scan the applicable deployed image
+inventory and upload SARIF to GitHub Code Scanning, where repository security
+permissions control access. The scheduled and manual runs scan the complete
+inventory; `main` pushes scan images changed by that push.
+
+The cloudflared vulnerability allowlist is scoped to that image only. Entries
+carry Trivy expiration dates; there is no repository-wide container CVE
+allowlist.
 
 ## Renovate compatibility and automerge
 
@@ -122,12 +144,13 @@ their warnings are never the only enforcement for a security invariant.
 
 ## Exception governance
 
-Every scanner suppression must identify one rule and resource and include:
+Every scanner or runtime-policy suppression must identify one rule, image, or
+resource and include:
 
 1. Why the control is inapplicable or conflicts with the cost profile.
 2. The compensating control.
 3. A review date no later than one year away.
 
-CI fails all other Checkov findings and HIGH/CRITICAL Trivy findings. Review the
-baseline whenever the AWS CIS, K3s CIS, provider, Lambda runtime, or cloudflared
-major version changes.
+CI fails all other enforced runtime-policy findings and fixed HIGH/CRITICAL
+Trivy image findings. Review the baseline whenever the AWS CIS, K3s CIS,
+provider, Lambda runtime, or a deployed image's major version changes.

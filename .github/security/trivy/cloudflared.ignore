@@ -1,0 +1,14 @@
+# Temporary upstream-image exceptions. These apply only to cloudflared scans
+# and expire automatically on the existing 2026-09-15 review date.
+CVE-2026-14456 exp:2026-09-15
+CVE-2026-33818 exp:2026-09-15
+CVE-2026-39821 exp:2026-09-15
+CVE-2026-39822 exp:2026-09-15
+CVE-2026-46600 exp:2026-09-15
+CVE-2026-56853 exp:2026-09-15
+CVE-2026-56854 exp:2026-09-15
+CVE-2026-56858 exp:2026-09-15
+CVE-2026-56859 exp:2026-09-15
+CVE-2026-56860 exp:2026-09-15
+CVE-2026-56862 exp:2026-09-15
+CVE-2026-84304 exp:2026-09-15

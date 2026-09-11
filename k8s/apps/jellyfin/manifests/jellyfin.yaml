@@ -41,6 +41,8 @@ spec:
       labels:
         app: jellyfin
     spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
       securityContext:
         supplementalGroups: [39, 105] # 39=video (card1), 105=render (renderD128)
       containers:
