@@ -15,6 +15,50 @@ data:
     }
 
     // ============================================================
+    // Traces: receive OTLP/gRPC in-cluster and forward to Grafana Cloud
+    // ============================================================
+
+    otelcol.receiver.otlp "cluster" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+
+      output {
+        traces = [otelcol.processor.memory_limiter.traces.input]
+      }
+    }
+
+    otelcol.processor.memory_limiter "traces" {
+      check_interval = "1s"
+      limit          = "150MiB"
+      spike_limit    = "30MiB"
+
+      output {
+        traces = [otelcol.processor.batch.traces.input]
+      }
+    }
+
+    otelcol.processor.batch "traces" {
+      output {
+        traces = [otelcol.exporter.otlp.grafana_cloud.input]
+      }
+    }
+
+    otelcol.auth.basic "grafana_cloud" {
+      client_auth {
+        username = convert.nonsensitive(remote.kubernetes.secret.grafana_cloud.data["OTLP_USERNAME"])
+        password = remote.kubernetes.secret.grafana_cloud.data["API_KEY"]
+      }
+    }
+
+    otelcol.exporter.otlp "grafana_cloud" {
+      client {
+        endpoint = convert.nonsensitive(remote.kubernetes.secret.grafana_cloud.data["OTLP_URL"])
+        auth     = otelcol.auth.basic.grafana_cloud.handler
+      }
+    }
+
+    // ============================================================
     // Metrics: Kubernetes discovery and scraping
     // ============================================================
 
@@ -212,9 +256,9 @@ data:
         max_keepalive_time = "5m"
       }
       endpoint {
-        url = nonsensitive(remote.kubernetes.secret.grafana_cloud.data["METRICS_URL"])
+        url = convert.nonsensitive(remote.kubernetes.secret.grafana_cloud.data["METRICS_URL"])
         basic_auth {
-          username = nonsensitive(remote.kubernetes.secret.grafana_cloud.data["METRICS_USERNAME"])
+          username = convert.nonsensitive(remote.kubernetes.secret.grafana_cloud.data["METRICS_USERNAME"])
           password = remote.kubernetes.secret.grafana_cloud.data["API_KEY"]
         }
         queue_config {
@@ -278,9 +322,9 @@ data:
 
     loki.write "grafana_cloud" {
       endpoint {
-        url = nonsensitive(remote.kubernetes.secret.grafana_cloud.data["LOGS_URL"])
+        url = convert.nonsensitive(remote.kubernetes.secret.grafana_cloud.data["LOGS_URL"])
         basic_auth {
-          username = nonsensitive(remote.kubernetes.secret.grafana_cloud.data["LOGS_USERNAME"])
+          username = convert.nonsensitive(remote.kubernetes.secret.grafana_cloud.data["LOGS_USERNAME"])
           password = remote.kubernetes.secret.grafana_cloud.data["API_KEY"]
         }
       }

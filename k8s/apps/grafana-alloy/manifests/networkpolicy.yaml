@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-alloy-otlp-ingress
+  namespace: grafana-alloy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: grafana-alloy
+      app.kubernetes.io/name: alloy
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 4317
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: grafana-alloy
+      ports:
+        - port: 12345
+          protocol: TCP
