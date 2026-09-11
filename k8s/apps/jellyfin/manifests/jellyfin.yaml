@@ -112,7 +112,7 @@ metadata:
   name: jellyfin
   namespace: jellyfin
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: jellyfin.${DOMAIN}
+    external-dns.kubernetes.io/hostname: jellyfin.${DOMAIN}
 spec:
   selector:
     app: jellyfin
