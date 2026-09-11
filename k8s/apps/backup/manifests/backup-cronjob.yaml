@@ -27,6 +27,11 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
           initContainers:
             - name: pg-dump
               image: postgres:18.6-alpine3.23@sha256:697c180dbf244d3ce4a8f4cbc0156cde840af055c1bf8b76aebe422a4822086f
@@ -46,6 +51,11 @@ spec:
                     secretKeyRef:
                       name: postgresql-credentials
                       key: password
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
               volumeMounts:
                 - name: pgdump
                   mountPath: /pgdump
@@ -96,6 +106,11 @@ spec:
                     secretKeyRef:
                       name: restic-credentials
                       key: password
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
               resources:
                 limits:
                   cpu: "2"
@@ -137,6 +152,11 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: restic
               image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
@@ -173,6 +193,11 @@ spec:
                     secretKeyRef:
                       name: restic-credentials
                       key: password
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
               resources:
                 limits:
                   cpu: "2"

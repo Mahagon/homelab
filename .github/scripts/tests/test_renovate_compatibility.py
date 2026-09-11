@@ -19,6 +19,7 @@ SPEC.loader.exec_module(compatibility)
 
 class CompatibilityTest(unittest.TestCase):
     def test_parses_single_and_multi_source_applications(self) -> None:
+        """Parse Helm sources from single- and multi-source Applications."""
         single = {
             "kind": "Application",
             "metadata": {"name": "replicator"},
@@ -57,6 +58,7 @@ class CompatibilityTest(unittest.TestCase):
         self.assertEqual(multi_sources[0].values, "domain: ${DOMAIN}")
 
     def test_substitutes_known_placeholders_and_preserves_runtime_variables(self) -> None:
+        """Replace known placeholders while preserving runtime variables."""
         value = compatibility.substitute_placeholders("${DOMAIN} ${EMAIL} ${HACS_VERSION}")
         self.assertEqual(
             value,
@@ -64,6 +66,7 @@ class CompatibilityTest(unittest.TestCase):
         )
 
     def test_extracts_unique_added_image_references(self) -> None:
+        """Extract unique image references only from added diff lines."""
         diff = """--- a/pod.yaml
 +++ b/pod.yaml
 - image: old/image:1
@@ -77,6 +80,7 @@ class CompatibilityTest(unittest.TestCase):
         )
 
     def test_platform_detection_ignores_attestations(self) -> None:
+        """Find supported platforms while ignoring attestation descriptors."""
         descriptor = {
             "manifests": [
                 {"platform": {"os": "unknown", "architecture": "unknown"}},
@@ -86,7 +90,18 @@ class CompatibilityTest(unittest.TestCase):
         self.assertTrue(compatibility.supports_platform(descriptor, "linux", "amd64"))
         self.assertFalse(compatibility.supports_platform(descriptor, "linux", "arm64"))
 
+    def test_single_manifest_uses_image_config_for_platform(self) -> None:
+        """Use image configuration metadata for single-platform manifests."""
+        def runner(command: list[str]) -> str:
+            """Return fixture metadata for an image inspection command."""
+            if command[-1] == "{{json .Manifest}}":
+                return json.dumps({"digest": "sha256:good"})
+            return json.dumps({"os": "linux", "architecture": "amd64"})
+
+        compatibility.validate_image("example/app@sha256:good", runner)
+
     def test_pinned_tag_must_match_digest_and_platform(self) -> None:
+        """Require pinned tags to match their digest and target platform."""
         descriptors = {
             "example/app:2@sha256:good": {
                 "digest": "sha256:good",
@@ -99,14 +114,19 @@ class CompatibilityTest(unittest.TestCase):
         }
 
         def runner(command: list[str]) -> str:
+            """Return the descriptor fixture selected by image reference."""
             return json.dumps(descriptors[command[4]])
 
         compatibility.validate_image("example/app:2@sha256:good", runner)
         descriptors["example/app:2"]["digest"] = "sha256:moved"
         with self.assertRaisesRegex(ValueError, "not the pinned digest"):
             compatibility.validate_image("example/app:2@sha256:good", runner)
+        compatibility.validate_image(
+            "example/app:2@sha256:good", runner, require_tag_match=False
+        )
 
     def test_helm_render_failure_propagates(self) -> None:
+        """Propagate Helm rendering failures to the compatibility check."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             application = root / "k8s/apps/example/application.yaml"
@@ -127,6 +147,7 @@ spec:
             )
 
             def failing_runner(command: list[str]) -> str:
+                """Raise a representative Helm rendering failure."""
                 raise RuntimeError("helm failed")
 
             old_cwd = Path.cwd()

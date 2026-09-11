@@ -1,0 +1,87 @@
+# Time-bounded runtime-policy exceptions for repo-owned workloads.
+# Every control must be exercised by the current manifests; stale and expired entries fail CI.
+exceptions:
+  - resource: CronJob/backup/homelab-backup-daily
+    container: pg-dump
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: The upstream PostgreSQL client image creates temporary state and runs with its packaged user model.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: CronJob/backup/homelab-backup-daily
+    container: restic
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: Restic must write its cache and read root-owned backup volumes.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: CronJob/backup/homelab-backup-weekly
+    container: restic
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: Restic must write its cache and read root-owned backup volumes.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: Deployment/home-assistant/home-assistant
+    container: init-config
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: The init step writes configuration onto a volume shared with Home Assistant.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: Deployment/home-assistant/home-assistant
+    container: install-hacs
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: HACS installation writes into the shared Home Assistant configuration tree.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: Deployment/home-assistant/home-assistant
+    container: home-assistant
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: Home Assistant writes runtime configuration and requires host integration access.
+    compensating_control: Only NET_ADMIN and NET_RAW are added; all other capabilities are dropped, with RuntimeDefault seccomp and no service-account token.
+    expires: 2027-03-11
+  - resource: Deployment/jellyfin/jellyfin
+    container: jellyfin
+    controls:
+      - privileged
+      - allow-privilege-escalation
+      - seccomp-runtime-default
+      - read-only-root-filesystem
+      - run-as-non-root
+      - drop-all-capabilities
+    reason: Jellyfin currently needs privileged access to the host GPU device for hardware transcoding.
+    compensating_control: The pod has no service-account token and is isolated in a dedicated namespace with restricted-policy audit and warning labels.
+    expires: 2027-03-11
+  - resource: Deployment/kube-system/local-path-provisioner-ssd
+    container: "*"
+    controls: [automount-service-account-token]
+    reason: The storage controller must call the Kubernetes API to provision persistent volumes.
+    compensating_control: A dedicated service account and narrowly scoped storage RBAC are used.
+    expires: 2027-03-11
+  - resource: Deployment/kube-system/local-path-provisioner-ssd
+    container: local-path-provisioner
+    controls: [run-as-non-root]
+    reason: The upstream provisioner image does not guarantee a non-root runtime user.
+    compensating_control: RuntimeDefault seccomp, read-only root filesystem, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: Pod/kube-system/helper-pod
+    container: helper-pod
+    controls: [run-as-non-root]
+    reason: The dynamic storage helper must create and remove host-owned volume directories.
+    compensating_control: The helper has no service-account token, a read-only root filesystem, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: Deployment/paperless/paperless
+    container: paperless
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: The upstream image writes application state and uses its packaged user initialization.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: Deployment/redis/redis
+    container: redis
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: Redis writes persistence data and uses its upstream image user model.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11
+  - resource: StatefulSet/postgresql/postgresql
+    container: postgresql
+    controls: [read-only-root-filesystem, run-as-non-root]
+    reason: PostgreSQL writes database state and uses its upstream image user initialization.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    expires: 2027-03-11

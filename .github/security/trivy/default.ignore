@@ -1,0 +1,2 @@
+# Intentionally empty. Vulnerability exceptions belong in an image-specific
+# allowlist selected by the Kubernetes image inventory.

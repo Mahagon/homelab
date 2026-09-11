@@ -40,7 +40,7 @@ repoServer:
         name: argocd-cmp-envsubst-apps
   extraContainers:
     - name: cmp-envsubst
-      image: quay.io/argoproj/argocd:latest
+      image: quay.io/argoproj/argocd:v3.5.2@sha256:e2aadfae709d904e87f46ba4aa49601d827b3022db22cd4d03aae816a2e7097b
       command: [/var/run/argocd/argocd-cmp-server]
       env:
         - name: DOMAIN
@@ -66,8 +66,15 @@ repoServer:
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        seccompProfile:
+          type: RuntimeDefault
+        capabilities:
+          drop:
+            - ALL
     - name: cmp-envsubst-apps
-      image: quay.io/argoproj/argocd:latest
+      image: quay.io/argoproj/argocd:v3.5.2@sha256:e2aadfae709d904e87f46ba4aa49601d827b3022db22cd4d03aae816a2e7097b
       command: [/var/run/argocd/argocd-cmp-server]
       env:
         - name: DOMAIN
@@ -93,3 +100,10 @@ repoServer:
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        seccompProfile:
+          type: RuntimeDefault
+        capabilities:
+          drop:
+            - ALL
