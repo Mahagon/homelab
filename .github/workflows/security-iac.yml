@@ -41,26 +41,45 @@ jobs:
     timeout-minutes: 5
     outputs:
       deploy: ${{ steps.detect.outputs.deploy }}
+      cloudflared-image: ${{ steps.detect.outputs.cloudflared-image }}
     steps:
       - name: Check out repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Detect deployable changes
+      - name: Detect workflow changes
         id: detect
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REQUESTED_APPLY: ${{ inputs.apply }}
         run: |
           set -euo pipefail
           deploy=false
+          cloudflared_image=""
+
+          image_at_revision() {
+            local revision="$1"
+            local manifest="k8s/apps/cloudflared/manifests/cloudflared.yaml"
+            git show "${revision}:${manifest}" 2>/dev/null |
+              awk '$1 == "image:" { print $2; exit }' || true
+          }
 
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             deploy="${REQUESTED_APPLY}"
+            cloudflared_image="$(image_at_revision "${GITHUB_SHA}")"
+          elif [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            base_image="$(image_at_revision "${PR_BASE_SHA}")"
+            head_image="$(image_at_revision "${PR_HEAD_SHA}")"
+            if [[ -n "${head_image}" && "${head_image}" != "${base_image}" ]]; then
+              cloudflared_image="${head_image}"
+            fi
           elif [[ "${EVENT_NAME}" == "push" ]]; then
+            cloudflared_image="$(image_at_revision "${GITHUB_SHA}")"
             base="${BEFORE_SHA}"
             if [[ -z "${base}" || "${base}" == "0000000000000000000000000000000000000000" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
               base="$(git rev-parse "${GITHUB_SHA}^")"
@@ -73,6 +92,7 @@ jobs:
           fi
 
           echo "deploy=${deploy}" >> "${GITHUB_OUTPUT}"
+          echo "cloudflared-image=${cloudflared_image}" >> "${GITHUB_OUTPUT}"
 
   opentofu:
     name: OpenTofu and Lambda
@@ -143,6 +163,7 @@ jobs:
 
   kubernetes:
     name: Kubernetes and secret scanning
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -231,11 +252,12 @@ jobs:
 
 
       - name: Scan cloudflared image
+        if: needs.changes.outputs.cloudflared-image != ''
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.74.0
           scan-type: image
-          image-ref: cloudflare/cloudflared:2026.8.3@sha256:51c9cefcb4569df44e1ad403ab1d3d8065aa8e84339bcfc6aee75502e1140339
+          image-ref: ${{ needs.changes.outputs.cloudflared-image }}
           trivyignores: .trivyignore
           severity: HIGH,CRITICAL
           ignore-unfixed: true
