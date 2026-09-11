@@ -81,7 +81,7 @@ exceptions:
     expires: 2027-03-11
   - resource: StatefulSet/postgresql/postgresql
     container: postgresql
-    controls: [read-only-root-filesystem, run-as-non-root]
-    reason: PostgreSQL writes database state and uses its upstream image user initialization.
-    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    controls: [read-only-root-filesystem]
+    reason: PostgreSQL writes database state and runtime files to its packaged filesystem paths.
+    compensating_control: The container runs as UID/GID 70 with no service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
     expires: 2027-03-11
