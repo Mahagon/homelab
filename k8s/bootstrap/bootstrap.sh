@@ -174,17 +174,40 @@ fi
 kubectl create namespace grafana-alloy --dry-run=client -o yaml | kubectl apply -f -
 
 if kubectl get secret grafana-cloud-credentials --namespace grafana-alloy &>/dev/null 2>&1; then
-  echo "==> grafana-cloud-credentials secret already exists, skipping."
+  _gc_otlp_url="$(kubectl get secret grafana-cloud-credentials --namespace grafana-alloy -o jsonpath='{.data.OTLP_URL}' 2>/dev/null)"
+  _gc_otlp_username="$(kubectl get secret grafana-cloud-credentials --namespace grafana-alloy -o jsonpath='{.data.OTLP_USERNAME}' 2>/dev/null)"
+
+  if [[ -n "$_gc_otlp_url" && -n "$_gc_otlp_username" ]]; then
+    echo "==> grafana-cloud-credentials secret already includes OTLP credentials, skipping."
+  else
+    echo "==> Adding Grafana Cloud OTLP credentials to the existing secret..."
+    echo ""
+    echo "Find these at https://grafana.com -> your stack -> OpenTelemetry -> Configure"
+    echo "The existing API token must include the traces:write scope."
+    echo ""
+    read -rp "  OTLP/gRPC endpoint (host:port): " GC_OTLP_URL
+    read -rp "  OTLP username (instance ID): " GC_OTLP_USERNAME
+
+    _gc_otlp_url_b64="$(printf '%s' "$GC_OTLP_URL" | base64 | tr -d '\n')"
+    _gc_otlp_username_b64="$(printf '%s' "$GC_OTLP_USERNAME" | base64 | tr -d '\n')"
+    kubectl patch secret grafana-cloud-credentials \
+      --namespace grafana-alloy \
+      --type merge \
+      -p "{\"data\":{\"OTLP_URL\":\"${_gc_otlp_url_b64}\",\"OTLP_USERNAME\":\"${_gc_otlp_username_b64}\"}}"
+  fi
 else
   echo "==> Configuring Grafana Cloud credentials..."
   echo ""
-  echo "Find these at https://grafana.com → your stack → Details"
+  echo "Find these at https://grafana.com -> your stack -> Details"
+  echo "The API token must include metrics:write, logs:write, and traces:write scopes."
   echo ""
   read -rp "  Grafana Cloud API token (glc_...): " GC_API_KEY
   read -rp "  Prometheus remote write URL: " GC_METRICS_URL
   read -rp "  Prometheus username (instance ID): " GC_METRICS_USERNAME
   read -rp "  Loki push URL: " GC_LOGS_URL
   read -rp "  Loki username (instance ID): " GC_LOGS_USERNAME
+  read -rp "  OTLP/gRPC endpoint (host:port): " GC_OTLP_URL
+  read -rp "  OTLP username (instance ID): " GC_OTLP_USERNAME
 
   kubectl create secret generic grafana-cloud-credentials \
     --namespace grafana-alloy \
@@ -193,6 +216,8 @@ else
     --from-literal=METRICS_USERNAME="$GC_METRICS_USERNAME" \
     --from-literal=LOGS_URL="$GC_LOGS_URL" \
     --from-literal=LOGS_USERNAME="$GC_LOGS_USERNAME" \
+    --from-literal=OTLP_URL="$GC_OTLP_URL" \
+    --from-literal=OTLP_USERNAME="$GC_OTLP_USERNAME" \
     --dry-run=client -o yaml | kubectl apply -f -
 fi
 

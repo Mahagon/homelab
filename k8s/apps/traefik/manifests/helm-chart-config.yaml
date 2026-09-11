@@ -15,6 +15,18 @@ spec:
     metrics:
       prometheus:
         entryPoint: metrics
+    tracing:
+      serviceName: traefik
+      sampleRate: 1.0
+      resourceAttributes:
+        k8s.cluster.name: homelab
+        deployment.environment.name: homelab
+      otlp:
+        enabled: true
+        grpc:
+          enabled: true
+          endpoint: grafana-alloy.grafana-alloy.svc.cluster.local:4317
+          insecure: true
     ports:
       metrics:
         port: 9100

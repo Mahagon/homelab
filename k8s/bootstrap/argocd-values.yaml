@@ -20,6 +20,9 @@ configs:
     scopes: "[groups, email]"
   params:
     server.insecure: true
+    otlp.address: grafana-alloy.grafana-alloy.svc.cluster.local:4317
+    otlp.attrs: k8s.cluster.name:homelab,deployment.environment.name:homelab
+    otlp.insecure: true
 notifications:
   enabled: false
 server:

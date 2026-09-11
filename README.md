@@ -139,6 +139,17 @@ Secrets are handled automatically - no manual secret creation needed after boots
 
 DNS records are created automatically by external-dns once it starts.
 
+Grafana Alloy receives OTLP/gRPC traces from Traefik and ArgoCD on the internal
+`grafana-alloy.grafana-alloy.svc.cluster.local:4317` endpoint and forwards them
+to Grafana Cloud. Traefik traces all ingress routers, while ArgoCD traces its API
+server, application controller, and repository server. Both use 100% sampling.
+
+The `grafana-cloud-credentials` secret must include the OTLP/gRPC `OTLP_URL`
+(in `host:port` form) and `OTLP_USERNAME`, and its `API_KEY` must have the
+`traces:write` scope. Re-run
+the bootstrap script to add missing OTLP fields to an existing secret; existing
+metrics and logs credentials are preserved.
+
 For outbound-only Home Assistant remote access and the private German Alexa
 integration, follow [docs/home-assistant-alexa.md](docs/home-assistant-alexa.md).
 The associated cost-aware CIS evidence and exceptions are documented in
