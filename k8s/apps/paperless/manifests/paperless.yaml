@@ -169,7 +169,7 @@ metadata:
   name: paperless-ngx
   namespace: paperless
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: paperless.${DOMAIN}
+    external-dns.kubernetes.io/hostname: paperless.${DOMAIN}
 spec:
   selector:
     app: paperless
