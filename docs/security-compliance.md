@@ -121,9 +121,28 @@ inventory and upload SARIF to GitHub Code Scanning, where repository security
 permissions control access. The scheduled and manual runs scan the complete
 inventory; `main` pushes scan images changed by that push.
 
-The cloudflared vulnerability allowlist is scoped to that image only. Entries
-carry Trivy expiration dates; there is no repository-wide container CVE
-allowlist.
+Every image can have a vulnerability allowlist under
+`.github/security/trivy/`, selected by its canonical image repository. Trivy
+therefore applies an exception only while scanning that specific image; unknown
+images receive the intentionally empty `default.ignore`. Each image-specific
+file records the versions used for its review and every entry has a Trivy
+expiration date. An expired entry blocks CI until a patched version is adopted,
+the entry is removed, or the risk is explicitly reviewed and given a new date.
+
+This generic policy covers fixed HIGH/CRITICAL findings in third-party images
+for which no reviewed upstream version without the finding is currently
+available. Compensating controls are immutable digests for repository-owned
+references, PR scans for changed deployed images, full scheduled inventory
+scans, SARIF retention in GitHub Code Scanning rather than workflow logs,
+Renovate update tracking, and a maximum one-month expiry. A newly discovered ID
+remains blocking until it is reviewed; the allowlist is never generated or
+renewed automatically.
+
+The 2026-09-11 review also evaluated the open Renovate container updates:
+cloudflared 2026.9.0, Argo CD chart 10.8.4, and Renovate 44.79.6. The Argo CD
+chart renders the same Argo CD, Dex, and Redis image versions as chart 10.8.2.
+The Helm 4.3.0 and AWS provider 6.64.0 updates are executable/dependency updates,
+not container images, and therefore are outside the image allowlist.
 
 ## Renovate compatibility and automerge
 
@@ -145,7 +164,7 @@ their warnings are never the only enforcement for a security invariant.
 ## Exception governance
 
 Every scanner or runtime-policy suppression must identify one rule, image, or
-resource and include:
+resource in its adjacent comments or supporting documentation and include:
 
 1. Why the control is inapplicable or conflicts with the cost profile.
 2. The compensating control.

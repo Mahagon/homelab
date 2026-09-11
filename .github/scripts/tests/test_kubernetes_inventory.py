@@ -77,17 +77,35 @@ spec:
         with self.assertRaisesRegex(ValueError, "human-readable tag"):
             inventory.validate_explicit_pin("example/app@sha256:" + "a" * 64)
 
-    def test_matrix_deduplicates_and_scopes_cloudflared_ignore(self) -> None:
-        """Deduplicate targets and scope the cloudflared ignore file."""
+    def test_matrix_deduplicates_and_scopes_image_allowlists(self) -> None:
+        """Deduplicate targets and select repository-specific allowlists."""
         cloudflared = "cloudflare/cloudflared:1@sha256:" + "a" * 64
         app = "ghcr.io/example/app:2@sha256:" + "b" * 64
-        entries = inventory.matrix_entries({cloudflared, app}, {app})
+        argocd = "quay.io/argoproj/argocd:v3.5.2@sha256:" + "c" * 64
+        entries = inventory.matrix_entries({cloudflared, app, argocd}, {app})
 
-        self.assertEqual([entry["image"] for entry in entries], [cloudflared, app])
+        self.assertEqual(
+            [entry["image"] for entry in entries], [cloudflared, app, argocd]
+        )
         self.assertEqual(entries[0]["source"], "raw")
-        self.assertEqual(entries[0]["ignorefile"], inventory.CLOUDFLARED_IGNORE)
+        self.assertEqual(
+            entries[0]["ignorefile"],
+            inventory.IMAGE_IGNORE_FILES["cloudflare/cloudflared"],
+        )
         self.assertEqual(entries[1]["source"], "raw+helm")
         self.assertEqual(entries[1]["ignorefile"], inventory.DEFAULT_IGNORE)
+        self.assertEqual(
+            entries[2]["ignorefile"],
+            inventory.IMAGE_IGNORE_FILES["quay.io/argoproj/argocd"],
+        )
+
+    def test_renovate_uses_its_image_specific_allowlist(self) -> None:
+        """Select the Renovate allowlist if that tooling image is inventoried."""
+        renovate = "ghcr.io/renovatebot/renovate:44.79.6@sha256:" + "d" * 64
+        self.assertEqual(
+            inventory.ignore_file(renovate),
+            inventory.IMAGE_IGNORE_FILES["ghcr.io/renovatebot/renovate"],
+        )
 
     def test_matrix_prefers_a_pinned_copy_of_the_same_tag(self) -> None:
         """Prefer an immutable reference when raw and Helm tags overlap."""

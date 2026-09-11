@@ -1,5 +1,5 @@
-# Temporary upstream-image exceptions. These apply only to cloudflared scans
-# and expire automatically on the existing 2026-09-15 review date.
+# Temporary exceptions scoped to cloudflare/cloudflared. The 2026.8.3 entries
+# retain their 2026-09-15 review date; 2026.9.0 was reviewed on 2026-09-11.
 CVE-2026-14456 exp:2026-09-15
 CVE-2026-33818 exp:2026-09-15
 CVE-2026-39821 exp:2026-09-15
@@ -12,3 +12,5 @@ CVE-2026-56859 exp:2026-09-15
 CVE-2026-56860 exp:2026-09-15
 CVE-2026-56862 exp:2026-09-15
 CVE-2026-84304 exp:2026-09-15
+# New fixed HIGH/CRITICAL finding present in 2026.9.0.
+CVE-2026-84445 exp:2026-10-11

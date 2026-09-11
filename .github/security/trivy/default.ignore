@@ -1,2 +1,2 @@
-# No global image vulnerability exceptions. Image-specific exceptions belong
-# in a separate file selected by the inventory matrix.
+# Intentionally empty. Vulnerability exceptions belong in an image-specific
+# allowlist selected by the Kubernetes image inventory.

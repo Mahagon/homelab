@@ -27,7 +27,11 @@ from renovate_compatibility import (
 IMAGE_REFERENCE = re.compile(r"(?m)^[ \t]*(?:-\s*)?image:\s*[\"']?([^\s\"'#]+)")
 PINNED_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 DEFAULT_IGNORE = ".github/security/trivy/default.ignore"
-CLOUDFLARED_IGNORE = ".github/security/trivy/cloudflared.ignore"
+IMAGE_IGNORE_FILES = {
+    "cloudflare/cloudflared": ".github/security/trivy/cloudflared.ignore",
+    "ghcr.io/renovatebot/renovate": ".github/security/trivy/renovate.ignore",
+    "quay.io/argoproj/argocd": ".github/security/trivy/argocd.ignore",
+}
 YamlMap = dict[str, object]
 
 
@@ -135,10 +139,8 @@ def scan_category(reference: str) -> str:
 
 
 def ignore_file(reference: str) -> str:
-    """Select the narrowest Trivy ignore file for an image."""
-    if canonical_image(reference) == "cloudflare/cloudflared":
-        return CLOUDFLARED_IGNORE
-    return DEFAULT_IGNORE
+    """Return the vulnerability allowlist scoped to an image repository."""
+    return IMAGE_IGNORE_FILES.get(canonical_image(reference), DEFAULT_IGNORE)
 
 
 def matrix_entries(
