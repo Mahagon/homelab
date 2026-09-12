@@ -28,6 +28,9 @@ PINNED_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 DEFAULT_IGNORE = ".github/security/trivy/default.ignore"
 IMAGE_IGNORE_FILES = {
     "cloudflare/cloudflared": ".github/security/trivy/cloudflared.ignore",
+    "ghcr.io/home-assistant/home-assistant": (
+        ".github/security/trivy/home-assistant.ignore"
+    ),
     "ghcr.io/renovatebot/renovate": ".github/security/trivy/renovate.ignore",
     "quay.io/argoproj/argocd": ".github/security/trivy/argocd.ignore",
     "registry.k8s.io/external-dns/external-dns": (
