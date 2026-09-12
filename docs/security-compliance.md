@@ -39,7 +39,7 @@ Because the deferred controls are material, documentation and CI must say
 | Pod Security Admission | Implemented | Compatible application namespaces enforce `baseline` and audit/warn `restricted`; elevated namespaces audit/warn `restricted`. Cloudflared enforces `restricted`. |
 | Service-account minimization | Implemented with exceptions | Repo-owned application Pods disable token automount. Controllers that call the Kubernetes API use dedicated service accounts and scoped RBAC. |
 | Privilege escalation | Implemented with exception | Disabled on owned workloads except the documented privileged Jellyfin container. |
-| Linux capabilities | Implemented with exceptions | Owned workloads drop `ALL`; Home Assistant adds only `NET_ADMIN` and `NET_RAW`, and Jellyfin retains its privileged GPU exception. |
+| Linux capabilities | Implemented with exceptions | Owned workloads drop `ALL` before narrow additions: Restic backup containers add `DAC_READ_SEARCH`, Home Assistant adds `NET_ADMIN` and `NET_RAW`, and Jellyfin retains its privileged GPU exception. |
 | Root execution | Partial | Cloudflared is fixed to UID/GID 65532. Workloads whose upstream initialization or host-volume access requires root have time-bounded exceptions. |
 | Seccomp | Implemented with exception | Owned workloads use `RuntimeDefault`; Jellyfin has a time-bounded hardware-access exception. |
 | Root filesystem | Partial | Controllers and simple workloads use read-only roots where safe; stateful applications have explicit, reviewed exceptions. |
@@ -59,8 +59,9 @@ have no effect. No default-deny policy is applied to existing namespaces.
   discovery. It cannot enter a `restricted` namespace without redesigning that
   discovery path.
 - Jellyfin currently runs privileged for its hardware/media requirements.
-- Backup jobs require root-readable volumes and writable Restic/PostgreSQL client
-  state. The local-path provisioner and helper require API or host-volume access.
+- Backup jobs retain `DAC_READ_SEARCH` for read-only traversal of service-owned
+  volumes and require writable Restic/PostgreSQL client state. The local-path
+  provisioner and helper require API or host-volume access.
 - Grafana Alloy requires host log mounts. Helm controllers that call the
   Kubernetes API retain their chart-managed service-account tokens and RBAC.
 - Cluster-wide secrets encryption, audit logging, EventRateLimit, and a complete
