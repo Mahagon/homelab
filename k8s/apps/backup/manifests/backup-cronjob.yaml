@@ -111,6 +111,8 @@ spec:
                 capabilities:
                   drop:
                     - ALL
+                  add:
+                    - DAC_READ_SEARCH
               resources:
                 limits:
                   cpu: "2"
@@ -198,6 +200,8 @@ spec:
                 capabilities:
                   drop:
                     - ALL
+                  add:
+                    - DAC_READ_SEARCH
               resources:
                 limits:
                   cpu: "2"

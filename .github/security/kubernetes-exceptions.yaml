@@ -11,13 +11,13 @@ exceptions:
     container: restic
     controls: [read-only-root-filesystem, run-as-non-root]
     reason: Restic must write its cache and read root-owned backup volumes.
-    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and only DAC_READ_SEARCH retained so read-only host volumes can be traversed.
     expires: 2027-03-11
   - resource: CronJob/backup/homelab-backup-weekly
     container: restic
     controls: [read-only-root-filesystem, run-as-non-root]
     reason: Restic must write its cache and read root-owned backup volumes.
-    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and all capabilities dropped.
+    compensating_control: No service-account token, RuntimeDefault seccomp, no privilege escalation, and only DAC_READ_SEARCH retained so read-only host volumes can be traversed.
     expires: 2027-03-11
   - resource: Deployment/home-assistant/home-assistant
     container: init-config
