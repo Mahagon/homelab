@@ -107,6 +107,16 @@ spec:
             inventory.IMAGE_IGNORE_FILES["ghcr.io/renovatebot/renovate"],
         )
 
+    def test_home_assistant_uses_its_image_specific_allowlist(self) -> None:
+        """Select the Home Assistant allowlist for its explicit image."""
+        home_assistant = (
+            "ghcr.io/home-assistant/home-assistant:2026.9.2@sha256:" + "e" * 64
+        )
+        self.assertEqual(
+            inventory.ignore_file(home_assistant),
+            inventory.IMAGE_IGNORE_FILES["ghcr.io/home-assistant/home-assistant"],
+        )
+
     def test_external_dns_uses_its_image_specific_allowlist(self) -> None:
         """Select the external-dns allowlist for its rendered Helm image."""
         external_dns = "registry.k8s.io/external-dns/external-dns:v0.22.0"
