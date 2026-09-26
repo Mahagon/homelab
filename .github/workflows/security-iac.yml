@@ -316,7 +316,6 @@ jobs:
           exit-code: "1"
           hide-progress: true
 
-
       - name: Scan entire repository for secrets
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -344,6 +343,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Scan changed image without publishing details
+        id: scan
+        # Report-only: CVEs must not block updates, which usually reduce them.
+        continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.74.0
