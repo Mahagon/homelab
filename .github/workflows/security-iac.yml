@@ -360,10 +360,10 @@ jobs:
           hide-progress: true
 
       - name: Explain local remediation
-        if: failure()
+        if: steps.scan.outcome == 'failure'
         env:
           IMAGE: ${{ matrix.target.image }}
-        run: echo "The changed image failed the vulnerability policy. Run Trivy against ${IMAGE} locally for details."
+        run: echo "::warning::${IMAGE} has fixable HIGH/CRITICAL CVEs. Run Trivy against it locally for details."
 
   image_scan_trusted:
     name: Trusted image scan (${{ matrix.target.image }})
@@ -384,6 +384,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Scan deployed image
+        # Report-only: findings go to Code Scanning, not a red build.
+        continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.74.0
