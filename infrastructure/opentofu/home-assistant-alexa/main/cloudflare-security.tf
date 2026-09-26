@@ -1,5 +1,11 @@
 locals {
   home_assistant_waf_scope = "(http.host eq \"${local.home_assistant_hostname}\")"
+
+  home_assistant_allowed_countries = ["DE"]
+  # Alexa directives come from the eu-west-1 Lambda (IE) and account linking
+  # from Amazon's token service, so Amazon ASNs bypass the geo block.
+  # ponytail: whole AWS ASNs, narrow to /api/alexa + /auth/token if abused
+  home_assistant_amazon_asns = [16509, 14618]
 }
 
 # Cloudflare automatically deploys its Free Managed Ruleset on Free zones. This
@@ -31,6 +37,13 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
       ref         = "home_assistant_reconnaissance_paths"
       description = "Block common source-control, secret-file, and unrelated CMS probes"
       expression  = "${local.home_assistant_waf_scope} and (starts_with(lower(http.request.uri.path), \"/.git\") or starts_with(lower(http.request.uri.path), \"/.svn\") or starts_with(lower(http.request.uri.path), \"/.hg\") or lower(http.request.uri.path) in {\"/.env\" \"/.ds_store\" \"/xmlrpc.php\" \"/wp-login.php\"} or starts_with(lower(http.request.uri.path), \"/wp-admin\") or starts_with(lower(http.request.uri.path), \"/phpmyadmin\"))"
+      action      = "block"
+      enabled     = true
+    },
+    {
+      ref         = "home_assistant_geo_allowlist"
+      description = "Block Home Assistant traffic from outside allowed countries, except Amazon (Alexa)"
+      expression  = "${local.home_assistant_waf_scope} and not (ip.src.country in {${join(" ", [for c in local.home_assistant_allowed_countries : "\"${c}\""])}}) and not (ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}})"
       action      = "block"
       enabled     = true
     }
