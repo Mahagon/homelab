@@ -239,7 +239,7 @@ spec:
             - name: scripts
               mountPath: /scripts
         - name: install-hacs
-          image: alpine:3.24@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f
+          image: alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
           command: [sh, -c]
           securityContext:
             allowPrivilegeEscalation: false
