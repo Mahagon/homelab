@@ -98,7 +98,7 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = length(cloudflare_ruleset.home_assistant_custom_waf.rules) == 3 && alltrue([for rule in cloudflare_ruleset.home_assistant_custom_waf.rules : rule.action == "block" && rule.enabled && strcontains(rule.expression, "homeassistant.example.invalid")])
+    condition     = length(cloudflare_ruleset.home_assistant_custom_waf.rules) == 4 && alltrue([for rule in cloudflare_ruleset.home_assistant_custom_waf.rules : rule.action == "block" && rule.enabled && strcontains(rule.expression, "homeassistant.example.invalid")])
     error_message = "All custom WAF rules must block and remain scoped to the Home Assistant hostname."
   }
 
