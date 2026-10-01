@@ -297,7 +297,7 @@ jobs:
       - name: Scan IaC misconfigurations
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.74.0
+          version: v0.75.0
           scan-type: fs
           scan-ref: infrastructure/opentofu/home-assistant-alexa
           scanners: misconfig
@@ -309,7 +309,7 @@ jobs:
       - name: Scan the cloudflared network boundary
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.74.0
+          version: v0.75.0
           scan-type: config
           scan-ref: k8s/apps/cloudflared/manifests
           severity: HIGH,CRITICAL
@@ -319,7 +319,7 @@ jobs:
       - name: Scan entire repository for secrets
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.74.0
+          version: v0.75.0
           scan-type: fs
           scan-ref: .
           scanners: secret
@@ -348,7 +348,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.74.0
+          version: v0.75.0
           scan-type: image
           image-ref: ${{ matrix.target.image }}
           trivyignores: ${{ matrix.target.ignorefile }}
@@ -390,7 +390,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.74.0
+          version: v0.75.0
           scan-type: image
           image-ref: ${{ matrix.target.image }}
           trivyignores: ${{ matrix.target.ignorefile }}
