@@ -6,7 +6,7 @@ continues to control them directly.
 
 ## Shelly VLAN 20 migration
 
-[`scripts/migrate-shelly-wifi.ps1`](scripts/migrate-shelly-wifi.ps1) discovers
+[`scripts/migrate_shelly_wifi.py`](scripts/migrate_shelly_wifi.py) discovers
 the Shelly config entries through the Home Assistant API, preserves each
 device's current WLAN as its fallback, switches its primary WLAN to VLAN 20,
 and verifies the device's MAC address at a DHCP address in the target subnet.
@@ -51,24 +51,24 @@ workstation while running this script.
 
 ### Preparation
 
-Use PowerShell 7 and create a Home Assistant administrator long-lived access
+Use Python 3.10+ (standard library only; no packages to install) and create a Home Assistant administrator long-lived access
 token under the user profile's Security page. The token, WLAN password, and
 Shelly password are read with secure prompts and are not placed on the command
 line or written to the checkpoint file. Home Assistant stores the Shelly
 credentials in its config-entry storage after reauthentication.
 
 Set `HOME_ASSISTANT_URL` to the externally reachable Home Assistant base URL,
-or pass it with `-HomeAssistantUrl`. Reauthentication
+or pass it with `--home-assistant-url`. Reauthentication
 flow discovery uses the local WebSocket endpoint
 `ws://192.168.178.10:8123/api/websocket` by default. Override it with
-`-HomeAssistantWebSocketUrl` if the Home Assistant address changes.
+`--home-assistant-websocket-url` if the Home Assistant address changes.
 
 Run an audit first:
 
-```powershell
-Set-Location k8s/apps/home-assistant
-$env:HOME_ASSISTANT_URL = "https://homeassistant.<your-domain>"
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode Audit
+```bash
+cd k8s/apps/home-assistant
+export HOME_ASSISTANT_URL="https://homeassistant.<your-domain>"
+./scripts/migrate_shelly_wifi.py audit
 ```
 
 Wake battery-powered Shellys immediately before auditing or migrating them.
@@ -76,16 +76,17 @@ Unavailable devices are skipped, not modified.
 
 ### Migrate
 
-Preview a batch without changing anything:
+By default every device change asks for confirmation; pass `--yes` to skip the
+prompts. Preview a batch without changing anything:
 
-```powershell
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode Migrate -BatchSize 5 -WhatIf
+```bash
+./scripts/migrate_shelly_wifi.py migrate --batch-size 5 --dry-run
 ```
 
 Migrate at most five devices:
 
-```powershell
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode Migrate -BatchSize 5
+```bash
+./scripts/migrate_shelly_wifi.py migrate --batch-size 5
 ```
 
 For every selected device, the script reads the current SSID, installs that
@@ -96,13 +97,14 @@ skipped on later runs.
 
 Select devices by Home Assistant title (wildcards are accepted), for example:
 
-```powershell
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode Migrate -DeviceTitle 'tempsensor' -BatchSize 1
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode Migrate -DeviceTitle 'Shelly Plug*' -BatchSize 5
+```bash
+./scripts/migrate_shelly_wifi.py migrate --device-title 'tempsensor' --batch-size 1
+./scripts/migrate_shelly_wifi.py migrate --device-title 'Shelly Plug*' --batch-size 5
 ```
 
 The default non-secret checkpoint is
-`$env:LOCALAPPDATA\ShellyVlanMigration\state.json`. Re-running `Migrate` uses
+`~/.local/state/shelly-vlan-migration/state.json` (override with
+`--state-path`). Re-running `migrate` uses
 the VLAN address for a device whose prior run reached discovery but did not
 finish.
 
@@ -110,34 +112,34 @@ finish.
 
 Protect devices without moving their WLAN:
 
-```powershell
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode Protect -BatchSize 5
+```bash
+./scripts/migrate_shelly_wifi.py protect --batch-size 5
 ```
 
-`Protect` updates Home Assistant immediately. If Home Assistant cannot accept
+`protect` updates Home Assistant immediately. If Home Assistant cannot accept
 newly enabled credentials, the script removes only the authentication that it
 enabled in that run. Authentication that already existed is never removed by
 that failure path.
 
 Verify connectivity and the shared password after migration:
 
-```powershell
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode Verify
+```bash
+./scripts/migrate_shelly_wifi.py verify
 ```
 
 ### Recovery
 
 If a device is not discovered on VLAN 20, its old WLAN fallback is deliberately
 left enabled, so it should remain reachable or reconnect to the old network.
-After correcting the target WLAN, rerun `Migrate`. To explicitly restore the
+After correcting the target WLAN, rerun `migrate`. To explicitly restore the
 old WLAN as primary and remove the fallback configuration:
 
-```powershell
-pwsh ./scripts/migrate-shelly-wifi.ps1 -Mode RollbackStaged
+```bash
+./scripts/migrate_shelly_wifi.py rollback-staged
 ```
 
 If a run failed after discovery, leave main-to-VLAN TCP `80/443` open and run
-`Migrate` again with the same shared password and target WLAN. The checkpoint
+`migrate` again with the same shared password and target WLAN. The checkpoint
 lets the script resume from the device's new DHCP address without repeating the
 WLAN handoff. Do not delete a checkpoint until every affected device is either
 complete or recovered.

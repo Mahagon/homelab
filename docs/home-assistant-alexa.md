@@ -30,25 +30,23 @@ for the resulting CIS gaps.
 
 ## 1. Workstation tools
 
-Run these from an elevated PowerShell prompt. Verify the IDs shown by
-`winget search` before installing if the package source has changed.
+These commands target a Fedora Atomic workstation (Silverblue, Kinoite, Bluefin,
+and similar) and use Homebrew so the immutable base image stays untouched. Any
+other way of providing the same CLIs (a toolbox/distrobox container, or
+`rpm-ostree install` plus a reboot) works equally well. The scripts also need
+`jq`, `curl`, `kubectl`, and `gh`.
 
-```powershell
-winget install --exact --id OpenTofu.Tofu
-winget install --exact --id Amazon.AWSCLI
-winget install --exact --id OpenJS.NodeJS.LTS
-winget install --exact --id AquaSecurity.Trivy
-winget install --exact --id TerraformLinters.tflint
+```bash
+brew install opentofu awscli node trivy tflint jq gh kubernetes-cli pipx
 
-npm install --global ask-cli@2
-python -m pip install --user pipx
-python -m pipx ensurepath
+npm install --global --prefix ~/.local ask-cli@2
+pipx ensurepath
 pipx install checkov==3.3.15
 ```
 
 Open a new terminal and verify:
 
-```powershell
+```bash
 tofu version
 aws --version
 ask --version
@@ -69,10 +67,10 @@ kubectl version --client
    user with permanent access keys for this project.
 5. Configure AWS CLI SSO and authenticate:
 
-   ```powershell
+   ```bash
    aws configure sso
    aws sso login --profile homelab-admin
-   $env:AWS_PROFILE = "homelab-admin"
+   export AWS_PROFILE=homelab-admin
    aws sts get-caller-identity
    ```
 
@@ -86,9 +84,9 @@ successfully but fail during account linking or device discovery.
 The bootstrap root deliberately uses local state because it creates the remote
 state bucket itself. Protect its state with an encrypted workstation backup.
 
-```powershell
-Set-Location infrastructure/opentofu/home-assistant-alexa/bootstrap
-Copy-Item terraform.tfvars.example terraform.tfvars
+```bash
+cd infrastructure/opentofu/home-assistant-alexa/bootstrap
+cp terraform.tfvars.example terraform.tfvars
 
 tofu init
 tofu fmt -check
@@ -150,29 +148,29 @@ The GitHub role uses OIDC and accepts only the exact subject
 `repo:Mahagon/homelab:environment:aws-production`. It cannot be assumed by a
 different repository or a normal branch workflow.
 
-Configure the environment from PowerShell with `gh`:
+Configure the environment with `gh`:
 
-```powershell
-$repoName = "Mahagon/homelab"
-$environmentName = "aws-production"
+```bash
+repo_name="Mahagon/homelab"
+environment_name="aws-production"
 
-gh api --method PUT "repos/$repoName/environments/$environmentName"
+gh api --method PUT "repos/$repo_name/environments/$environment_name"
 
-gh secret set HOME_ASSISTANT_DOMAIN --repo $repoName --env $environmentName
-gh secret set CLOUDFLARE_API_TOKEN --repo $repoName --env $environmentName
-gh secret set AWS_BUDGET_EMAIL --repo $repoName --env $environmentName
+gh secret set HOME_ASSISTANT_DOMAIN --repo "$repo_name" --env "$environment_name"
+gh secret set CLOUDFLARE_API_TOKEN --repo "$repo_name" --env "$environment_name"
+gh secret set AWS_BUDGET_EMAIL --repo "$repo_name" --env "$environment_name"
 
-$bootstrapDir = "infrastructure/opentofu/home-assistant-alexa/bootstrap"
-gh variable set AWS_DEPLOY_ROLE_ARN --repo $repoName --env $environmentName --body (tofu -chdir=$bootstrapDir output -raw github_deployment_role_arn)
-gh variable set TOFU_STATE_BUCKET --repo $repoName --env $environmentName --body (tofu -chdir=$bootstrapDir output -raw state_bucket_name)
+bootstrap_dir="infrastructure/opentofu/home-assistant-alexa/bootstrap"
+gh variable set AWS_DEPLOY_ROLE_ARN --repo "$repo_name" --env "$environment_name" --body "$(tofu -chdir="$bootstrap_dir" output -raw github_deployment_role_arn)"
+gh variable set TOFU_STATE_BUCKET --repo "$repo_name" --env "$environment_name" --body "$(tofu -chdir="$bootstrap_dir" output -raw state_bucket_name)"
 
-gh variable set CLOUDFLARE_ACCOUNT_ID --repo $repoName --env $environmentName --body "<ACCOUNT_ID>"
-gh variable set CLOUDFLARE_ZONE_ID --repo $repoName --env $environmentName --body "<ZONE_ID>"
-gh variable set ALEXA_SKILL_ID --repo $repoName --env $environmentName --body "<SKILL_ID>"
-gh variable set PUBLISH_DNS --repo $repoName --env $environmentName --body "true"
+gh variable set CLOUDFLARE_ACCOUNT_ID --repo "$repo_name" --env "$environment_name" --body "<ACCOUNT_ID>"
+gh variable set CLOUDFLARE_ZONE_ID --repo "$repo_name" --env "$environment_name" --body "<ZONE_ID>"
+gh variable set ALEXA_SKILL_ID --repo "$repo_name" --env "$environment_name" --body "<SKILL_ID>"
+gh variable set PUBLISH_DNS --repo "$repo_name" --env "$environment_name" --body "true"
 
-gh secret list --repo $repoName --env $environmentName
-gh variable list --repo $repoName --env $environmentName
+gh secret list --repo "$repo_name" --env "$environment_name"
+gh variable list --repo "$repo_name" --env "$environment_name"
 ```
 
 ## 5. Import the existing tunnel and deploy AWS resources
@@ -187,43 +185,43 @@ does not create a duplicate tunnel.
 
 For a local apply:
 
-```powershell
-Set-Location infrastructure/opentofu/home-assistant-alexa/main
-$env:AWS_PROFILE = "homelab-admin"
-$env:CLOUDFLARE_API_TOKEN = Read-Host "Cloudflare OpenTofu token"
-$env:TF_VAR_home_assistant_domain = Read-Host "Home Assistant root domain"
+```bash
+cd infrastructure/opentofu/home-assistant-alexa/main
+export AWS_PROFILE=homelab-admin
+read -rsp "Cloudflare OpenTofu token: " CLOUDFLARE_API_TOKEN; echo; export CLOUDFLARE_API_TOKEN
+read -rp "Home Assistant root domain: " TF_VAR_home_assistant_domain; export TF_VAR_home_assistant_domain
 
 tofu init -backend-config="bucket=<TOFU_STATE_BUCKET>"
-tofu import cloudflare_zero_trust_tunnel_cloudflared.home_assistant `
+tofu import cloudflare_zero_trust_tunnel_cloudflared.home_assistant \
   "<ACCOUNT_ID>/<TUNNEL_ID>"
-tofu import cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant `
+tofu import cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant \
   "<ACCOUNT_ID>/<TUNNEL_ID>"
-tofu import 'cloudflare_dns_record.home_assistant[0]' `
+tofu import 'cloudflare_dns_record.home_assistant[0]' \
   "<ZONE_ID>/<DNS_RECORD_ID>"
-tofu plan -var="cloudflare_account_id=<ACCOUNT_ID>" `
-  -var="cloudflare_zone_id=<ZONE_ID>" `
-  -var="budget_email=<EMAIL>" `
+tofu plan -var="cloudflare_account_id=<ACCOUNT_ID>" \
+  -var="cloudflare_zone_id=<ZONE_ID>" \
+  -var="budget_email=<EMAIL>" \
   -var="publish_dns=true" -var="alexa_skill_id=" -out first.tfplan
 tofu apply first.tfplan
 ```
 
-Do not put the Cloudflare token in a `.tfvars` file or PowerShell history.
+Do not put the Cloudflare token in a `.tfvars` file or shell history.
 Remove the environment variable after the apply:
 
-```powershell
-Remove-Item Env:CLOUDFLARE_API_TOKEN
+```bash
+unset CLOUDFLARE_API_TOKEN
 ```
 
 Once the consolidated `main` state has been applied successfully, retire the
 old standalone state without deleting any live Cloudflare resources:
 
-```powershell
+```bash
 tofu -chdir=infrastructure/opentofu/home-assistant-alexa/main state list
 tofu -chdir=infrastructure/opentofu/home-assistant-alexa/cloudflare state list
-tofu -chdir=infrastructure/opentofu/home-assistant-alexa/cloudflare state rm `
-  'cloudflare_dns_record.home_assistant[0]' `
-  cloudflare_zero_trust_tunnel_cloudflared.home_assistant `
-  cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant `
+tofu -chdir=infrastructure/opentofu/home-assistant-alexa/cloudflare state rm \
+  'cloudflare_dns_record.home_assistant[0]' \
+  cloudflare_zero_trust_tunnel_cloudflared.home_assistant \
+  cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant \
   data.cloudflare_zero_trust_tunnel_cloudflared_token.home_assistant
 ```
 
@@ -248,7 +246,7 @@ sudo systemctl is-active k3s
 Verify the running node no longer has the disabling flag before relying on the
 policies:
 
-```powershell
+```bash
 kubectl get node homelab -o jsonpath="{.metadata.annotations.k3s\.io/node-args}{'\n'}"
 kubectl get networkpolicy -n cloudflared
 ```
@@ -260,10 +258,10 @@ flag until K3s is restarted with the corrected configuration.
 After Argo CD has created the `cloudflared` namespace, transfer the connector
 token without writing it to disk:
 
-```powershell
-$env:AWS_PROFILE = "homelab-admin"
-infrastructure/opentofu/home-assistant-alexa/scripts/set-cloudflared-secret.ps1 `
-  -TofuDirectory infrastructure/opentofu/home-assistant-alexa/main
+```bash
+export AWS_PROFILE=homelab-admin
+infrastructure/opentofu/home-assistant-alexa/scripts/set-cloudflared-secret.sh \
+  --tofu-directory infrastructure/opentofu/home-assistant-alexa/main
 kubectl rollout status deployment/cloudflared --namespace cloudflared
 kubectl get pods --namespace cloudflared
 ```
@@ -289,14 +287,14 @@ longer reconciling `homeassistant.<your-domain>`.
 Find the existing Home Assistant DNS record ID in the Cloudflare dashboard or
 API. With `TF_VAR_publish_dns=true`, import it into the counted resource:
 
-```powershell
-Set-Location infrastructure/opentofu/home-assistant-alexa/main
-$env:TF_VAR_cloudflare_account_id = "<ACCOUNT_ID>"
-$env:TF_VAR_cloudflare_zone_id = "<ZONE_ID>"
-$env:TF_VAR_home_assistant_domain = "<YOUR_DOMAIN>"
-$env:TF_VAR_budget_email = "<EMAIL>"
-$env:TF_VAR_publish_dns = "true"
-$env:CLOUDFLARE_API_TOKEN = Read-Host "Cloudflare OpenTofu token"
+```bash
+cd infrastructure/opentofu/home-assistant-alexa/main
+export TF_VAR_cloudflare_account_id="<ACCOUNT_ID>"
+export TF_VAR_cloudflare_zone_id="<ZONE_ID>"
+export TF_VAR_home_assistant_domain="<YOUR_DOMAIN>"
+export TF_VAR_budget_email="<EMAIL>"
+export TF_VAR_publish_dns="true"
+read -rsp "Cloudflare OpenTofu token: " CLOUDFLARE_API_TOKEN; echo; export CLOUDFLARE_API_TOKEN
 
 tofu import 'cloudflare_dns_record.home_assistant[0]' '<ZONE_ID>/<DNS_RECORD_ID>'
 tofu plan -out dns-cutover.tfplan
@@ -311,17 +309,17 @@ For later deployments, set the `PUBLISH_DNS` environment variable to `true`.
 Changes to the main OpenTofu root or Lambda are applied automatically after
 both security jobs pass. To request an explicit main-branch deployment:
 
-```powershell
+```bash
 gh workflow run security-iac.yml --repo Mahagon/homelab --ref main -f apply=true -f allow_destroy=false
 gh run watch --repo Mahagon/homelab
 ```
 
 Verify from a network outside the home:
 
-```powershell
-Resolve-DnsName homeassistant.<your-domain>
-curl.exe --fail-with-body https://homeassistant.<your-domain>/auth/authorize
-curl.exe --include https://homeassistant.<your-domain>/api/
+```bash
+dig +short homeassistant.<your-domain>
+curl --fail-with-body https://homeassistant.<your-domain>/auth/authorize
+curl --include https://homeassistant.<your-domain>/api/
 ```
 
 The API request without a token must return `401 Unauthorized`. Public DNS must
@@ -360,25 +358,25 @@ and **Rules > Transform Rules** in Cloudflare. If rules already exist in any of
 these four phases, merge them into `cloudflare-security.tf` without exceeding
 the Free-plan limits, then import the existing phase ruleset:
 
-```powershell
-tofu import cloudflare_ruleset.home_assistant_custom_waf `
+```bash
+tofu import cloudflare_ruleset.home_assistant_custom_waf \
   'zones/<ZONE_ID>/<CUSTOM_PHASE_RULESET_ID>'
-tofu import cloudflare_ruleset.home_assistant_rate_limit `
+tofu import cloudflare_ruleset.home_assistant_rate_limit \
   'zones/<ZONE_ID>/<RATE_LIMIT_PHASE_RULESET_ID>'
-tofu import cloudflare_ruleset.home_assistant_cache `
+tofu import cloudflare_ruleset.home_assistant_cache \
   'zones/<ZONE_ID>/<CACHE_PHASE_RULESET_ID>'
-tofu import cloudflare_ruleset.home_assistant_response_headers `
+tofu import cloudflare_ruleset.home_assistant_response_headers \
   'zones/<ZONE_ID>/<RESPONSE_HEADERS_PHASE_RULESET_ID>'
 ```
 
 Do not apply a plan that removes an unrelated existing rule. After applying,
 verify the protected paths and inspect sampled matches under **Security > Events**:
 
-```powershell
-curl.exe --include http://homeassistant.<your-domain>/
-curl.exe --include https://homeassistant.<your-domain>/.git/config
-curl.exe --include --request TRACE https://homeassistant.<your-domain>/
-curl.exe --include https://homeassistant.<your-domain>/api/
+```bash
+curl --include http://homeassistant.<your-domain>/
+curl --include https://homeassistant.<your-domain>/.git/config
+curl --include --request TRACE https://homeassistant.<your-domain>/
+curl --include https://homeassistant.<your-domain>/api/
 ```
 
 The first three requests must be blocked by Cloudflare. The unauthenticated API
@@ -386,8 +384,8 @@ request must still reach Home Assistant and return `401 Unauthorized`.
 
 Check the successful API response headers as well:
 
-```powershell
-curl.exe --silent --dump-header - --output NUL `
+```bash
+curl --silent --dump-header - --output /dev/null \
   https://homeassistant.<your-domain>/
 ```
 
@@ -406,7 +404,7 @@ services before applying a change from TLS 1.0 or 1.1.
 Enabling DNSSEC in Cloudflare is only the first half of deployment. After the
 apply, retrieve the generated public DS record:
 
-```powershell
+```bash
 tofu output -raw cloudflare_dnssec_ds_record
 tofu output -json cloudflare_dnssec_registrar_fields
 ```
@@ -419,14 +417,14 @@ Until the registrar publishes the DS record, Cloudflare reports DNSSEC as
 `pending`. The deployment workflow accepts only this exact pending-to-active
 post-apply difference and continues to fail on every other kind of drift.
 
-```powershell
-Resolve-DnsName -Type DS <your-domain> -Server 1.1.1.1
-Resolve-DnsName homeassistant.<your-domain> -DnssecOk -Server 1.1.1.1
+```bash
+dig DS <your-domain> @1.1.1.1 +dnssec
+dig homeassistant.<your-domain> @1.1.1.1 +dnssec
 ```
 
 If DNSSEC was already enabled manually, import it before applying:
 
-```powershell
+```bash
 tofu import cloudflare_zone_dnssec.zone '<ZONE_ID>'
 ```
 
@@ -460,8 +458,8 @@ Argo CD mounts the Alexa package as
 `/config/integrations/alexa.yaml`. Validate it before restarting if Home
 Assistant has not rolled automatically:
 
-```powershell
-kubectl exec --namespace home-assistant deployment/home-assistant -- `
+```bash
+kubectl exec --namespace home-assistant deployment/home-assistant -- \
   python -m homeassistant --script check_config --config /config
 kubectl rollout restart --namespace home-assistant deployment/home-assistant
 kubectl rollout status --namespace home-assistant deployment/home-assistant
@@ -483,22 +481,22 @@ includes; they would make newly created entities visible to Alexa implicitly.
 The Amazon Developer account must use the same Amazon account as the Alexa app
 and Echo devices. Configure ASK once:
 
-```powershell
+```bash
 ask configure
 ```
 
 Provide public HTTPS URLs for a 108x108 PNG and a 512x512 PNG. These are Alexa
 catalog metadata, even for a development skill. Then run:
 
-```powershell
-$lambdaArn = tofu `
-  -chdir=infrastructure/opentofu/home-assistant-alexa/main `
-  output -raw lambda_function_arn
+```bash
+lambda_arn="$(tofu \
+  -chdir=infrastructure/opentofu/home-assistant-alexa/main \
+  output -raw lambda_function_arn)"
 
-infrastructure/opentofu/home-assistant-alexa/ask/provision-skill.ps1 `
-  -LambdaArn $lambdaArn `
-  -SmallIconUri "https://<host>/home-assistant-108.png" `
-  -LargeIconUri "https://<host>/home-assistant-512.png"
+infrastructure/opentofu/home-assistant-alexa/ask/provision-skill.sh \
+  --lambda-arn "$lambda_arn" \
+  --small-icon-uri "https://<host>/home-assistant-108.png" \
+  --large-icon-uri "https://<host>/home-assistant-512.png"
 ```
 
 ASK account linking is interactive because the CLI intentionally does not save
@@ -533,7 +531,7 @@ Expected examples:
 ## Rotation, troubleshooting, and rollback
 
 - Rotate the Cloudflare tunnel token by regenerating it, applying OpenTofu, and
-  immediately rerunning `set-cloudflared-secret.ps1`.
+  immediately rerunning `set-cloudflared-secret.sh`.
 - A `403` or account-linking loop usually means the client ID lacks the trailing
   slash, HTTP Basic was selected, or Cloudflare Access was enabled.
 - “No new devices found” commonly indicates the Lambda is outside `eu-west-1`,

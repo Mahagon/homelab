@@ -109,6 +109,9 @@ jobs:
       - name: Test Kubernetes tooling
         run: python -m unittest discover -s .github/scripts/tests -p "test_*.py" -v
 
+      - name: Test Shelly migration script
+        run: python -m unittest discover -s k8s/apps/home-assistant/scripts/tests -p "test_*.py" -v
+
       - name: Enforce owned workload runtime policy
         run: python .github/scripts/kubernetes_policy.py
 
