@@ -207,3 +207,6 @@ kubectl get secret restic-credentials -n backup -o jsonpath='{.data.password}' |
 | Vaultwarden    | `https://vault.<your-domain>`          |
 | PostgreSQL     | Internal only (ClusterIP on port 5432) |
 | Redis          | Internal only (ClusterIP on port 6379) |
+
+Home Assistant and Vaultwarden are also reachable from the internet through the
+Cloudflare Tunnel; see [docs/home-assistant-alexa.md](docs/home-assistant-alexa.md).

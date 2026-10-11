@@ -10,6 +10,11 @@ Cloudflare Tunnel and connects a private German Alexa Smart Home skill through
 an AWS Lambda function. No inbound Home Assistant port is required on the UniFi
 gateway.
 
+The same tunnel also publishes Vaultwarden at `vault.<your-domain>` so Bitwarden
+clients can sync away from home. It shares the connectors, the edge rulesets,
+and the `publish_dns` switch described here; its differences are called out in
+the relevant sections.
+
 The infrastructure is intentionally split into three trust domains:
 
 - OpenTofu manages AWS, Cloudflare Tunnel configuration, and public DNS.
@@ -269,8 +274,8 @@ kubectl get pods --namespace cloudflared
 Both replicas must be Ready. In Cloudflare, the `home-assistant-k3s` tunnel must
 show Healthy before changing DNS.
 
-The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, and Home Assistant
-TCP 8123. If the Home Assistant node address changes, update the `/32` rule in
+The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, Home Assistant
+TCP 8123, and Vaultwarden TCP 8080. If the Home Assistant node address changes, update the `/32` rule in
 `k8s/apps/cloudflared/manifests/networkpolicy.yaml` before moving the node.
 
 The UniFi gateway must not have a WAN port-forward or DMZ rule for Home
@@ -336,18 +341,21 @@ configures:
 - blocking of `CONNECT`, `TRACE`, and `TRACK`, which Home Assistant does not
   require;
 - blocking of common source-control, secret-file, WordPress, and phpMyAdmin
-  reconnaissance paths; and
+  reconnaissance paths;
+- a Home Assistant geo allowlist (Germany, plus Amazon's ASNs for Alexa);
+- a Vaultwarden rule that blocks every country except Germany, with no Amazon
+  bypass, and blocks `/admin` so the admin panel is reachable only on the LAN;
 - the Free plan's single rate-limit rule: more than 10 requests to Home
-  Assistant's `/auth/login_flow` path from one IP in 10 seconds causes a
-  10-second block;
-- an explicit cache bypass for every response from the Home Assistant hostname;
-  and
+  Assistant's `/auth/login_flow` path or Vaultwarden's `/identity/connect/token`
+  path from one IP in 10 seconds causes a 10-second block;
+- an explicit cache bypass for every response from either tunnel hostname; and
 - a 30-day hostname-scoped HSTS header without `includeSubDomains` or preload,
   plus `X-Content-Type-Options: nosniff`.
 
 The Free plan does not make `Host` available in rate-limit expressions. The
 rate-limit rule therefore uses Home Assistant's distinctive login-flow path and
-applies to that path across the `<your-domain>` zone. It intentionally excludes
+Vaultwarden's login path, and applies to those paths across the `<your-domain>`
+zone. It intentionally excludes
 `/auth/token`, `/api`, WebSocket traffic, and `/api/alexa/smart_home` so normal
 companion-app, OAuth, and Alexa operation is unaffected.
 
@@ -442,7 +450,11 @@ In the UniFi Network application, add a local DNS record/host override:
 
 ```text
 homeassistant.<your-domain> -> 192.168.178.10
+vault.<your-domain>         -> 192.168.178.10
 ```
+
+The Vaultwarden admin panel (`/admin`) is blocked at the Cloudflare edge, so it
+is usable only through this LAN path.
 
 UniFi changes menu names between releases; look under Settings, DNS, or Local
 DNS Records. Confirm a LAN client resolves the node address while a mobile
@@ -539,6 +551,7 @@ Expected examples:
 - Inspect Lambda logs without dumping events:
   `aws logs tail /aws/lambda/home-assistant-alexa --region eu-west-1`.
 - To roll back to LAN-only access, disable the Alexa development skill and set
-  `publish_dns=false`. Do not restore an inbound port forward.
+  `publish_dns=false`. This also unpublishes Vaultwarden, which shares the
+  switch. Do not restore an inbound port forward.
 - Versioned S3 state permits recovery of a prior state object. Restore only
   after copying the current version and reviewing an OpenTofu plan.
