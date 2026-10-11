@@ -180,6 +180,12 @@ run "secure_stack_without_skill" {
     condition     = cloudflare_zone_dnssec.zone.status == "active"
     error_message = "Cloudflare must sign the configured zone with DNSSEC."
   }
+
+  assert {
+    condition     = cloudflare_bot_management.zone.fight_mode && cloudflare_bot_management.zone.crawler_protection == "enabled"
+    error_message = "Bot Fight Mode and AI Labyrinth must be enabled."
+  }
+
 }
 
 run "backup_alerts_are_defined" {
