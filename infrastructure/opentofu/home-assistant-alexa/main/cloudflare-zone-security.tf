@@ -20,14 +20,13 @@ resource "cloudflare_zone_dnssec" "zone" {
   status  = "active"
 }
 
-# Bot Fight Mode challenges likely-automated traffic zone-wide, and AI Labyrinth
-# serves AI crawlers a link maze instead of real content. Bot Fight Mode cannot
-# be skipped by WAF rules on the Free plan, so watch Security > Events after
-# applying: if Alexa Lambda (AWS) or companion-app requests get challenged, set
-# fight_mode back to false.
+# Bot Fight Mode stays off: it cannot be skipped by WAF rules on the Free plan
+# and managed-challenged the Alexa Lambda (AWS, Apache-HttpClient) calling
+# /auth/token, which broke account linking and token refresh. AI Labyrinth
+# (crawler_protection) still serves AI crawlers a link maze.
 resource "cloudflare_bot_management" "zone" {
   zone_id            = var.cloudflare_zone_id
   enable_js          = true
-  fight_mode         = true
+  fight_mode         = false
   crawler_protection = "enabled"
 }
