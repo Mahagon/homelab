@@ -74,3 +74,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "grafana_prometheus_datasource_uid" {
+  description = "UID of the Grafana Cloud Prometheus data source that receives the Alloy metrics."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_-]{1,40}$", var.grafana_prometheus_datasource_uid))
+    error_message = "grafana_prometheus_datasource_uid must be a Grafana data source UID (letters, digits, '-' or '_')."
+  }
+}

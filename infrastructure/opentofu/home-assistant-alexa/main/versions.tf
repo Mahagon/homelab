@@ -21,6 +21,10 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5.24"
     }
+    grafana = {
+      source  = "grafana/grafana"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -33,4 +37,6 @@ provider "aws" {
 }
 
 provider "cloudflare" {}
+
+provider "grafana" {}
 
