@@ -23,7 +23,9 @@ from renovate_compatibility import (
     validate_image,
 )
 
-IMAGE_REFERENCE = re.compile(r"(?m)^[ \t]*(?:-\s*)?image:\s*[\"']?([^\s\"'#]+)")
+# Horizontal whitespace only after the key: a Helm values map ("image:" followed
+# by an indented "repository:") must not be read as an image named "repository:".
+IMAGE_REFERENCE = re.compile(r"(?m)^[ \t]*(?:-[ \t]*)?image:[ \t]*[\"']?([^\s\"'#]+)")
 PINNED_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 DEFAULT_IGNORE = ".github/security/trivy/default.ignore"
 IMAGE_IGNORE_FILES = {
