@@ -20,6 +20,7 @@ spec:
             - ${DOMAIN}
           excludeDomains:
             - homeassistant.${DOMAIN}
+            - vault.${DOMAIN}
           env:
             - name: CF_API_TOKEN
               valueFrom:
