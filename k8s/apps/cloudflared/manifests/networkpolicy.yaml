@@ -64,6 +64,30 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: cloudflared-vaultwarden-egress
+  namespace: cloudflared
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vaultwarden
+          podSelector:
+            matchLabels:
+              app: vaultwarden
+      ports:
+        # Pod port: policy is evaluated after Service DNAT (80 -> 8080).
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: cloudflared-tunnel-egress
   namespace: cloudflared
 spec:
