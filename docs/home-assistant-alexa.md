@@ -445,6 +445,9 @@ Certificate Transparency Monitoring has no suitable resource in the pinned
 Cloudflare provider. Enable it once under **SSL/TLS > Edge Certificates >
 Certificate Transparency Monitoring** and add the operational email address.
 
+Continuous script monitoring (Page Shield) likewise has no resource in the pinned
+provider. Enable it once under **Security > Settings > Client-side security**.
+
 ## 8. Preserve fast and resilient LAN access
 
 In the UniFi Network application, add a local DNS record/host override:
