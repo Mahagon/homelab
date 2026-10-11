@@ -36,7 +36,7 @@ Because the deferred controls are material, documentation and CI must say
 | Workload control | Status | Implementation |
 |---|---|---|
 | Namespace boundaries | Implemented | Applications use dedicated namespaces; cluster controllers remain in `kube-system` or their chart namespace. |
-| Pod Security Admission | Implemented | Compatible application namespaces enforce `baseline` and audit/warn `restricted`; elevated namespaces audit/warn `restricted`. Cloudflared and Vaultwarden enforce `restricted`. |
+| Pod Security Admission | Implemented | Compatible application namespaces enforce `baseline` and audit/warn `restricted`; elevated namespaces audit/warn `restricted`. Cloudflared, Vaultwarden, and Forgejo enforce `restricted`; Forgejo is LAN-only (no tunnel route) with default-deny ingress admitting only Traefik. |
 | Service-account minimization | Implemented with exceptions | Repo-owned application Pods disable token automount. Controllers that call the Kubernetes API use dedicated service accounts and scoped RBAC. |
 | Privilege escalation | Implemented with exception | Disabled on owned workloads except the documented privileged Jellyfin container. |
 | Linux capabilities | Implemented with exceptions | Owned workloads drop `ALL` before narrow additions: Restic backup containers add `DAC_READ_SEARCH`, Home Assistant adds `NET_ADMIN` and `NET_RAW`, and Jellyfin retains its privileged GPU exception. |

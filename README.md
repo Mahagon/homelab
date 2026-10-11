@@ -202,6 +202,7 @@ kubectl get secret restic-credentials -n backup -o jsonpath='{.data.password}' |
 | -------------- | -------------------------------------- |
 | ArgoCD         | `https://argocd.<your-domain>`         |
 | Home Assistant | `https://homeassistant.<your-domain>`  |
+| Forgejo        | `https://git.<your-domain>` (LAN only) |
 | Jellyfin       | `https://jellyfin.<your-domain>`       |
 | Paperless-ngx  | `https://paperless.<your-domain>`      |
 | Vaultwarden    | `https://vault.<your-domain>`          |
