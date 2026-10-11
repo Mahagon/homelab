@@ -146,7 +146,7 @@ it to this account and zone with only:
 - Cache Settings: Read and Write for `<your-domain>`.
 - Zone Transform Rules: Read and Write for `<your-domain>`.
 - Zone Settings: Read and Write for `<your-domain>`.
-- Bot Management: Read and Write for `<your-domain>` (Bot Fight Mode and AI Labyrinth).
+- Bot Management: Read and Write for `<your-domain>` (AI Labyrinth; Bot Fight Mode is kept off because it challenges the Alexa Lambda).
 - Account Rulesets: Read and Write.
 - Account Filter Lists: Read and Write.
 
