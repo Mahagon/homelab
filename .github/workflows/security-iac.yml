@@ -444,9 +444,13 @@ jobs:
       - changes
       - opentofu
       - kubernetes
+    # Without a status function GitHub adds an implicit success() that is false
+    # whenever an upstream job was skipped, which the image scans routinely are.
     if: >-
+      !cancelled() &&
       github.ref == 'refs/heads/main' &&
       needs.changes.outputs.deploy == 'true' &&
+      needs.changes.result == 'success' &&
       needs.opentofu.result == 'success' &&
       needs.kubernetes.result == 'success'
     runs-on: ubuntu-latest

@@ -36,6 +36,24 @@ ignored: image: context-only
             },
         )
 
+    def test_ignores_helm_style_image_maps(self) -> None:
+        """Skip Helm values that split an image into repository and tag keys."""
+        values = """
+admissionController:
+  image:
+    repository: registry.example/app
+    tag: 1.0.0@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  certGen:
+    image:
+      repository: registry.example/certgen
+containers:
+  - image: busybox:1.38@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+"""
+        self.assertEqual(
+            inventory.image_references(values),
+            {"busybox:1.38@sha256:" + "b" * 64},
+        )
+
     def test_rendered_inventory_ignores_helm_test_hooks(self) -> None:
         """Exclude Helm test-hook images from the deployed inventory."""
         rendered = """
