@@ -3,6 +3,8 @@ locals {
   tunnel_name             = "home-assistant-k3s"
   home_assistant_hostname = "homeassistant.${var.home_assistant_domain}"
   home_assistant_url      = "https://${local.home_assistant_hostname}"
+  vaultwarden_hostname    = "vault.${var.home_assistant_domain}"
+  vaultwarden_origin      = "http://vaultwarden.vaultwarden.svc.cluster.local:80"
   common_tags = merge({
     ManagedBy   = "OpenTofu"
     Project     = "home-assistant-alexa"
@@ -167,6 +169,16 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "home_assistant" {
         }
       },
       {
+        hostname = local.vaultwarden_hostname
+        service  = local.vaultwarden_origin
+        origin_request = {
+          connect_timeout  = 10
+          tcp_keep_alive   = 30
+          http_host_header = local.vaultwarden_hostname
+          no_tls_verify    = false
+        }
+      },
+      {
         service = "http_status:404"
       }
     ]
@@ -185,16 +197,28 @@ resource "cloudflare_dns_record" "home_assistant" {
   comment = "Home Assistant via the home-assistant-k3s Cloudflare Tunnel; managed by OpenTofu."
 }
 
+resource "cloudflare_dns_record" "vaultwarden" {
+  count = var.publish_dns ? 1 : 0
+
+  zone_id = var.cloudflare_zone_id
+  name    = "vault"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.home_assistant.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
+  comment = "Vaultwarden via the home-assistant-k3s Cloudflare Tunnel; managed by OpenTofu."
+}
+
 check "tunnel_origin_contract" {
   assert {
-    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[0].service == "http://home-assistant.home-assistant.svc.cluster.local:8123"
-    error_message = "The tunnel may only target the internal Home Assistant service."
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[*].service == tolist(["http://home-assistant.home-assistant.svc.cluster.local:8123", local.vaultwarden_origin, "http_status:404"])
+    error_message = "The tunnel may only target the internal Home Assistant and Vaultwarden services."
   }
 }
 
 check "dns_targets_tunnel" {
   assert {
-    condition     = !var.publish_dns || cloudflare_dns_record.home_assistant[0].content == "${cloudflare_zero_trust_tunnel_cloudflared.home_assistant.id}.cfargotunnel.com"
-    error_message = "The public DNS record must target the managed tunnel."
+    condition     = !var.publish_dns || alltrue([for record in concat(cloudflare_dns_record.home_assistant, cloudflare_dns_record.vaultwarden) : record.content == "${cloudflare_zero_trust_tunnel_cloudflared.home_assistant.id}.cfargotunnel.com"])
+    error_message = "The public DNS records must target the managed tunnel."
   }
 }

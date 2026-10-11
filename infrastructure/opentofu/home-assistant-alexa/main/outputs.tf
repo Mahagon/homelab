@@ -20,6 +20,12 @@ output "public_hostname" {
   sensitive   = true
 }
 
+output "vaultwarden_hostname" {
+  description = "Vaultwarden hostname published through the tunnel."
+  value       = local.vaultwarden_hostname
+  sensitive   = true
+}
+
 output "alexa_permission_configured" {
   description = "Whether the Lambda invocation permission is restricted to an Alexa Skill ID."
   value       = var.alexa_skill_id != ""
