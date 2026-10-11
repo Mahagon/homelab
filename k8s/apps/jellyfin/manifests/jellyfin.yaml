@@ -47,7 +47,7 @@ spec:
         supplementalGroups: [39, 105] # 39=video (card1), 105=render (renderD128)
       containers:
         - name: jellyfin
-          image: jellyfin/jellyfin:12.1@sha256:326be1010b16c92e492f6c7dd6fd105943db84ce723c73183279a1ab357b8f9b
+          image: jellyfin/jellyfin:12.2@sha256:da3cd1e48322a35e4b60f3d0a49fca2649e7acce90346dd6e42db777f94e3bbd
           securityContext:
             # SELinux is Enforcing on this CoreOS node and a plain hostPath
             # device can't pass the cgroup/SELinux check, so root ffmpeg can't
