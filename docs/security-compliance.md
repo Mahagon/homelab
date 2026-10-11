@@ -36,7 +36,7 @@ Because the deferred controls are material, documentation and CI must say
 | Workload control | Status | Implementation |
 |---|---|---|
 | Namespace boundaries | Implemented | Applications use dedicated namespaces; cluster controllers remain in `kube-system` or their chart namespace. |
-| Pod Security Admission | Implemented | Compatible application namespaces enforce `baseline` and audit/warn `restricted`; elevated namespaces audit/warn `restricted`. Cloudflared enforces `restricted`. |
+| Pod Security Admission | Implemented | Compatible application namespaces enforce `baseline` and audit/warn `restricted`; elevated namespaces audit/warn `restricted`. Cloudflared and Vaultwarden enforce `restricted`. |
 | Service-account minimization | Implemented with exceptions | Repo-owned application Pods disable token automount. Controllers that call the Kubernetes API use dedicated service accounts and scoped RBAC. |
 | Privilege escalation | Implemented with exception | Disabled on owned workloads except the documented privileged Jellyfin container. |
 | Linux capabilities | Implemented with exceptions | Owned workloads drop `ALL` before narrow additions: Restic backup containers add `DAC_READ_SEARCH`, Home Assistant adds `NET_ADMIN` and `NET_RAW`, and Jellyfin retains its privileged GPU exception. |
@@ -45,13 +45,14 @@ Because the deferred controls are material, documentation and CI must say
 | Root filesystem | Partial | Controllers and simple workloads use read-only roots where safe; stateful applications have explicit, reviewed exceptions. |
 | Host namespaces | Implemented with exception | Home Assistant retains `hostNetwork` for local-device discovery; owned workloads do not use host PID or IPC. |
 | Resource governance | Implemented | CPU/memory requests and limits, fixed replica count, and no autoscaler. |
-| Network segmentation | Configured, pending node enablement | Cloudflared namespace default-deny with separate DNS, tunnel 7844, and Home Assistant 8123 egress policies; K3s must run without `--disable-network-policy true`. |
+| Network segmentation | Configured, pending node enablement | Cloudflared namespace default-deny with separate DNS, tunnel 7844, Home Assistant 8123, and Vaultwarden 8080 egress policies; Vaultwarden namespace default-deny ingress admitting only Traefik and cloudflared; K3s must run without `--disable-network-policy true`. |
 | Secret handling | Partial | Token is a read-only Secret mount and never stored in Git; K3s secrets-at-rest encryption is outside this scope. |
 | Image provenance | Partial | Explicit workload images use readable tags plus immutable digests and Renovate tracking; rendered Helm images are inventoried and scanned, but admission-time signature verification is not enabled. |
 | Availability | Implemented | Two connectors, readiness/liveness probes, rolling update, and PDB. Both replicas share one physical node. |
 
 The K3s network-policy controller is enabled because otherwise the new policies
-have no effect. No default-deny policy is applied to existing namespaces.
+have no effect. No default-deny policy is applied to the other existing
+namespaces.
 
 ### Explicit existing exceptions
 
@@ -77,24 +78,27 @@ appear compliant.
 | Threat | Control |
 |---|---|
 | Internet scanning of the home network | Tunnel is outbound-only; no Home Assistant WAN NAT/port forward. |
-| Bypass of public authentication | Home Assistant authentication/MFA remains mandatory; unauthenticated `/api/` returns 401. |
+| Bypass of public authentication | Home Assistant authentication/MFA remains mandatory; unauthenticated `/api/` returns 401. Vaultwarden has signups disabled, relies on its own authentication and two-step login, and its `/admin` panel is blocked at the edge. |
 | Stolen Alexa OAuth token | Lambda neither stores nor logs tokens and forwards them only to the fixed HTTPS Home Assistant endpoint. |
 | Arbitrary Lambda invocation | Resource permission requires the Alexa Smart Home service principal and exact Skill ID. |
 | Lambda cost amplification | Eight-second timeout, 256 MB memory, and the AWS account-level concurrency quota. |
 | Tunnel compromise | Connector token is a sensitive state output and Kubernetes Secret; the pod cannot modify remote routing. Rotate after suspected disclosure. Connector egress is restricted to TCP/UDP 7844. |
 | DNS takeover or drift | Dedicated Cloudflare API token, OpenTofu-managed proxied CNAME, ExternalDNS exclusion, and post-apply empty plan. |
 | Forged DNS responses | Cloudflare signs the zone with DNSSEC; the generated DS record must also be published at the registrar and verified externally. |
-| Web exploit and reconnaissance traffic | Cloudflare's automatically deployed Free Managed Ruleset plus OpenTofu-managed hostname-scoped custom WAF blocks non-HTTPS ports, unsafe methods, and common secret/CMS probes. |
-| Authentication request flooding | The Free-plan rate-limit rule blocks an IP for 10 seconds after more than 10 Home Assistant login-flow requests in 10 seconds; OAuth token, API, WebSocket, and Alexa paths are excluded. |
-| Sensitive response caching | A hostname-scoped Cache Rule makes every Home Assistant response ineligible for Cloudflare edge caching. |
-| TLS downgrade and browser content confusion | The zone requires TLS 1.2 or newer and enables TLS 1.3; Home Assistant responses receive a conservative 30-day HSTS policy and `nosniff` without affecting sibling subdomains. |
+| Web exploit and reconnaissance traffic | Cloudflare's automatically deployed Free Managed Ruleset plus OpenTofu-managed hostname-scoped custom WAF blocks non-HTTPS ports, unsafe methods, and common secret/CMS probes on both tunnel hostnames. Home Assistant is limited to Germany plus Amazon's ASNs; Vaultwarden is limited to Germany. |
+| Authentication request flooding | The Free-plan rate-limit rule blocks an IP for 10 seconds after more than 10 Home Assistant login-flow or Vaultwarden login requests in 10 seconds; OAuth token, API, WebSocket, and Alexa paths are excluded. |
+| Sensitive response caching | Hostname-scoped Cache Rules make every Home Assistant and Vaultwarden response ineligible for Cloudflare edge caching. |
+| TLS downgrade and browser content confusion | The zone requires TLS 1.2 or newer and enables TLS 1.3; Home Assistant and Vaultwarden responses receive a conservative 30-day HSTS policy and `nosniff` without affecting sibling subdomains. |
 | Unauthorized certificate issuance | Cloudflare Certificate Transparency Monitoring is an explicit one-time dashboard control because provider v5.24 has no suitable managed resource. |
 | CI credential theft | Short-lived GitHub OIDC credentials, exact trust subject, read-only default workflow permissions, and pinned actions. |
 | Accidental broad Alexa exposure | Explicit 14-entity allowlist; no domain/glob includes and no proactive-event credentials. |
 
-Cloudflare Access is intentionally absent from this hostname because it would
-intercept Alexa account linking and directives. Home Assistant MFA protects
-interactive remote users instead.
+Cloudflare Access is intentionally absent from the Home Assistant hostname
+because it would intercept Alexa account linking and directives. Home Assistant
+MFA protects interactive remote users instead. It is also absent from the
+Vaultwarden hostname because the Bitwarden mobile and desktop clients cannot
+complete an Access login; vault data is end-to-end encrypted and two-step login
+protects accounts instead.
 
 ## Automated evidence
 
