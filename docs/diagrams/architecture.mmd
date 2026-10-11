@@ -16,12 +16,14 @@ flowchart TD
     K3s --> VPA["Vertical Pod Autoscaler"]
     K3s --> AppServices["Application services"]
     AppServices --> HomeAssistant["Home Assistant"]
+    AppServices --> Vaultwarden["Vaultwarden"]
 
     Traefik --> AppServices
     ArgoCD -->|reconciles| AppServices
     Replicator -->|syncs secrets| AppServices
     VPA -->|adjusts resources| AppServices
     Cloudflared -->|internal HTTP 8123| HomeAssistant
+    Cloudflared -->|internal HTTP 8080| Vaultwarden
 
     SSD["SSD 256 GB - OS, K3s state, fast PVs"]
     HDD["HDD 4 TB - media, documents"]

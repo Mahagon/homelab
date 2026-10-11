@@ -88,7 +88,7 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = length(cloudflare_dns_record.home_assistant) == 0
+    condition     = length(cloudflare_dns_record.home_assistant) == 0 && length(cloudflare_dns_record.vaultwarden) == 0
     error_message = "DNS must remain unpublished during the initial connector deployment."
   }
 
@@ -98,8 +98,28 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = length(cloudflare_ruleset.home_assistant_custom_waf.rules) == 4 && alltrue([for rule in cloudflare_ruleset.home_assistant_custom_waf.rules : rule.action == "block" && rule.enabled && strcontains(rule.expression, "homeassistant.example.invalid")])
-    error_message = "All custom WAF rules must block and remain scoped to the Home Assistant hostname."
+    condition     = length(cloudflare_ruleset.home_assistant_custom_waf.rules) == 5 && alltrue([for rule in cloudflare_ruleset.home_assistant_custom_waf.rules : rule.action == "block" && rule.enabled && (strcontains(rule.expression, "http.host eq \"homeassistant.example.invalid\"") || strcontains(rule.expression, "http.host eq \"vault.example.invalid\"") || strcontains(rule.expression, "http.host in {\"homeassistant.example.invalid\" \"vault.example.invalid\"}"))])
+    error_message = "All custom WAF rules must block and remain scoped to the tunnel hostnames."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_custom_waf.rules[3].expression == "(http.host eq \"homeassistant.example.invalid\") and not (ip.src.country in {\"DE\"}) and not (ip.src.asnum in {16509 14618})"
+    error_message = "The Home Assistant geo allowlist must stay scoped to the Home Assistant hostname."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression == "(http.host eq \"vault.example.invalid\") and (not (ip.src.country in {\"DE\"}) or lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\"))"
+    error_message = "Vaultwarden must be limited to allowed countries with no Amazon bypass, and its admin panel must not be public."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[*].service == tolist(["http://home-assistant.home-assistant.svc.cluster.local:8123", "http://vaultwarden.vaultwarden.svc.cluster.local:80", "http_status:404"])
+    error_message = "The tunnel must route only Home Assistant and Vaultwarden, ending in the 404 catch-all."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[1].hostname == "vault.example.invalid"
+    error_message = "The Vaultwarden origin must be bound to the vault hostname."
   }
 
   assert {
@@ -113,8 +133,8 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/login_flow") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/token") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/api")
-    error_message = "Rate limiting must protect login creation without affecting OAuth token, Home Assistant API, or Alexa traffic."
+    condition     = strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/login_flow") && strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/identity/connect/token") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/auth/token") && !strcontains(cloudflare_ruleset.home_assistant_rate_limit.rules[0].expression, "/api")
+    error_message = "Rate limiting must protect Home Assistant and Vaultwarden logins without affecting OAuth token, Home Assistant API, or Alexa traffic."
   }
 
   assert {
@@ -128,6 +148,11 @@ run "secure_stack_without_skill" {
   }
 
   assert {
+    condition     = length(cloudflare_ruleset.home_assistant_cache.rules) == 2 && cloudflare_ruleset.home_assistant_cache.rules[1].expression == "(http.host eq \"vault.example.invalid\")" && cloudflare_ruleset.home_assistant_cache.rules[1].action == "set_cache_settings" && !cloudflare_ruleset.home_assistant_cache.rules[1].action_parameters.cache
+    error_message = "Every Vaultwarden response must bypass the Cloudflare cache."
+  }
+
+  assert {
     condition     = cloudflare_ruleset.home_assistant_response_headers.phase == "http_response_headers_transform" && cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["strict-transport-security"].value == "max-age=2592000"
     error_message = "Home Assistant responses must receive the conservative 30-day HSTS policy."
   }
@@ -135,6 +160,11 @@ run "secure_stack_without_skill" {
   assert {
     condition     = cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["x-content-type-options"].value == "nosniff" && !strcontains(cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["strict-transport-security"].value, "includeSubDomains") && !strcontains(cloudflare_ruleset.home_assistant_response_headers.rules[0].action_parameters.headers["strict-transport-security"].value, "preload")
     error_message = "Security headers must disable MIME sniffing without imposing HSTS on unrelated subdomains."
+  }
+
+  assert {
+    condition     = length(cloudflare_ruleset.home_assistant_response_headers.rules) == 2 && cloudflare_ruleset.home_assistant_response_headers.rules[1].expression == "(http.host eq \"vault.example.invalid\")" && cloudflare_ruleset.home_assistant_response_headers.rules[1].action_parameters.headers["strict-transport-security"].value == "max-age=2592000" && cloudflare_ruleset.home_assistant_response_headers.rules[1].action_parameters.headers["x-content-type-options"].value == "nosniff"
+    error_message = "Vaultwarden responses must receive the same conservative HSTS and nosniff headers."
   }
 
   assert {
@@ -169,6 +199,11 @@ run "skill_and_dns_are_restricted" {
   assert {
     condition     = cloudflare_dns_record.home_assistant[0].proxied && cloudflare_dns_record.home_assistant[0].type == "CNAME" && cloudflare_dns_record.home_assistant[0].name == "homeassistant"
     error_message = "Home Assistant DNS must be a proxied CNAME."
+  }
+
+  assert {
+    condition     = cloudflare_dns_record.vaultwarden[0].proxied && cloudflare_dns_record.vaultwarden[0].type == "CNAME" && cloudflare_dns_record.vaultwarden[0].name == "vault"
+    error_message = "Vaultwarden DNS must be a proxied CNAME."
   }
 }
 
