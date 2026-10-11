@@ -102,8 +102,8 @@ spec:
               value: "false"
             - name: PAPERLESS_OCR_LANGUAGE
               value: "deu+eng"
-            - name: PAPERLESS_OCR_SKIP_ARCHIVE_FILE
-              value: "with_text"
+            - name: PAPERLESS_ARCHIVE_FILE_GENERATION
+              value: "auto"
             - name: PAPERLESS_OCR_DESKEW
               value: "true"
             - name: PAPERLESS_OCR_ROTATE_PAGES
@@ -141,17 +141,21 @@ spec:
               memory: 512Mi
             limits:
               memory: 1536Mi
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /
               port: 8000
-            initialDelaySeconds: 60
             periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /
               port: 8000
-            initialDelaySeconds: 30
             periodSeconds: 10
       volumes:
         - name: data
