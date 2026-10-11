@@ -102,8 +102,8 @@ spec:
               value: "false"
             - name: PAPERLESS_OCR_LANGUAGE
               value: "deu+eng"
-            - name: PAPERLESS_OCR_SKIP_ARCHIVE_FILE
-              value: "with_text"
+            - name: PAPERLESS_ARCHIVE_FILE_GENERATION
+              value: "auto"
             - name: PAPERLESS_OCR_DESKEW
               value: "true"
             - name: PAPERLESS_OCR_ROTATE_PAGES
