@@ -141,17 +141,21 @@ spec:
               memory: 512Mi
             limits:
               memory: 1536Mi
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /
               port: 8000
-            initialDelaySeconds: 60
             periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /
               port: 8000
-            initialDelaySeconds: 30
             periodSeconds: 10
       volumes:
         - name: data
