@@ -182,7 +182,7 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = cloudflare_bot_management.zone.fight_mode && cloudflare_bot_management.zone.crawler_protection == "enabled"
+    condition     = cloudflare_bot_management.zone.fight_mode && cloudflare_bot_management.zone.enable_js && cloudflare_bot_management.zone.crawler_protection == "enabled"
     error_message = "Bot Fight Mode and AI Labyrinth must be enabled."
   }
 

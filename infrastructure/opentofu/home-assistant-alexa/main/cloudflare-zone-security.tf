@@ -27,6 +27,7 @@ resource "cloudflare_zone_dnssec" "zone" {
 # fight_mode back to false.
 resource "cloudflare_bot_management" "zone" {
   zone_id            = var.cloudflare_zone_id
+  enable_js          = true
   fight_mode         = true
   crawler_protection = "enabled"
 }
