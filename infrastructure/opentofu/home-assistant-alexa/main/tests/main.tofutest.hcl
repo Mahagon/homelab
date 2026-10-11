@@ -33,6 +33,8 @@ mock_provider "archive" {
   }
 }
 
+mock_provider "grafana" {}
+
 mock_provider "cloudflare" {
   mock_resource "cloudflare_zero_trust_tunnel_cloudflared" {
     defaults = {
@@ -52,6 +54,8 @@ variables {
   cloudflare_zone_id    = "fedcba9876543210fedcba9876543210"
   home_assistant_domain = "example.invalid"
   budget_email          = "alerts@example.com"
+
+  grafana_prometheus_datasource_uid = "grafanacloud-prom"
 }
 
 run "secure_stack_without_skill" {
@@ -175,6 +179,20 @@ run "secure_stack_without_skill" {
   assert {
     condition     = cloudflare_zone_dnssec.zone.status == "active"
     error_message = "Cloudflare must sign the configured zone with DNSSEC."
+  }
+}
+
+run "backup_alerts_are_defined" {
+  command = plan
+
+  assert {
+    condition     = length(grafana_rule_group.backup.rule) == 4 && alltrue([for r in grafana_rule_group.backup.rule : r.condition == "C" && length(r.data) == 3])
+    error_message = "The backup alert group must contain the four rules, each with query, reduce and threshold stages."
+  }
+
+  assert {
+    condition     = contains(flatten([for e in grafana_contact_point.homelab_email.email : tolist(e.addresses)]), var.budget_email)
+    error_message = "Backup alerts must notify the configured email address."
   }
 }
 
