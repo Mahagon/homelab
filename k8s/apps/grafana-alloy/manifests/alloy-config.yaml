@@ -231,6 +231,8 @@ data:
     prometheus.scrape "pod_annotations" {
       targets         = discovery.relabel.pod_annotations.output
       scrape_interval = "60s"
+      // Keep metric-provided labels (e.g. kube-state-metrics' namespace/pod) instead of exported_*
+      honor_labels    = true
       forward_to      = [prometheus.relabel.drop_high_cardinality.receiver]
     }
 
