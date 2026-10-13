@@ -43,9 +43,9 @@ metadata:
   namespace: home-assistant
 data:
   alexa.yaml: |
+    # Packages may only carry customize* under homeassistant:. Any other core
+    # key (external_url, internal_url, ...) invalidates the whole block.
     homeassistant:
-      external_url: https://homeassistant.${DOMAIN}
-      internal_url: https://homeassistant.${DOMAIN}
       customize:
         switch.computer:
           friendly_name: Computer
@@ -90,13 +90,84 @@ data:
           friendly_name: Alle Rollläden
           device_class: shutter
 
+    # Member list and state aggregation only. Alexa and the UI use the
+    # template light below, which keeps the light.wohnraum_licht entity ID.
     light:
       - platform: group
-        name: Wohnraum Licht
+        name: Wohnraum Licht Gruppe
         entities:
           - light.licht
           - light.licht_2
           - light.licht_3
+
+    template:
+      - light:
+          - name: Wohnraum Licht
+            state: "{{ is_state('light.wohnraum_licht_gruppe', 'on') }}"
+            level: "{{ state_attr('light.wohnraum_licht_gruppe', 'brightness') | default(0, true) }}"
+            availability: "{{ states('light.wohnraum_licht_gruppe') not in ['unavailable', 'unknown'] }}"
+            turn_on:
+              - action: script.wohnraum_licht_set
+                data:
+                  target_state: "on"
+            turn_off:
+              - action: script.wohnraum_licht_set
+                data:
+                  target_state: "off"
+            set_level:
+              - action: script.wohnraum_licht_set
+                data:
+                  target_state: "on"
+                  brightness: "{{ brightness }}"
+
+    # The Shelly dimmers occasionally answer a command with an RPC error, which
+    # left single lights in the old state. Send the command once, then resend
+    # it to members that did not switch. Bounded to ~3s so the Alexa Lambda's
+    # origin timeout is never reached.
+    script:
+      wohnraum_licht_set:
+        alias: Wohnraum Licht schalten
+        mode: restart
+        fields:
+          target_state:
+            description: "on or off"
+            required: true
+          brightness:
+            description: Optional brightness (0-255) when switching on
+        variables:
+          members: "{{ state_attr('light.wohnraum_licht_gruppe', 'entity_id') | list }}"
+          light_data: "{{ {'brightness': brightness | int} if target_state == 'on' and brightness is defined else {} }}"
+        sequence:
+          - action: "light.turn_{{ target_state }}"
+            target:
+              entity_id: "{{ members }}"
+            data: "{{ light_data }}"
+            continue_on_error: true
+          - repeat:
+              count: 3
+              sequence:
+                - wait_template: "{{ members | reject('is_state', target_state) | reject('is_state', 'unavailable') | list | count == 0 }}"
+                  timeout: 1
+                - if: "{{ not wait.completed }}"
+                  then:
+                    - action: "light.turn_{{ target_state }}"
+                      target:
+                        entity_id: "{{ members | reject('is_state', target_state) | reject('is_state', 'unavailable') | list }}"
+                      data: "{{ light_data }}"
+                      continue_on_error: true
+
+    # Log the error frame a Shelly returns for a rejected RPC call (code and
+    # message) without the regular debug chatter of the websocket client.
+    logger:
+      default: warning
+      logs:
+        aioshelly.rpc_device.wsrpc: debug
+      filters:
+        aioshelly.rpc_device.wsrpc:
+          - "^(send|result)\\("
+          - "^Notification: "
+          - "^handle call "
+          - "^recv\\((?!.*'error')"
 
     http:
       ip_ban_enabled: true
