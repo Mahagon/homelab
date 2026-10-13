@@ -245,7 +245,7 @@ data:
             name: Badezimmer Rollladen
             display_categories: INTERIOR_BLIND
           cover.shutters:
-            name: Alle Rollläden
+            name: Rollläden
             display_categories: INTERIOR_BLIND
 ---
 apiVersion: v1
