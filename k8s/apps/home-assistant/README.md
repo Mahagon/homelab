@@ -4,6 +4,22 @@ The Home Assistant workload uses host networking on `192.168.178.10`. Shelly
 devices can be isolated on VLAN 20 (`192.168.20.0/24`) while Home Assistant
 continues to control them directly.
 
+## Theme and dashboard
+
+[`manifests/frontend.yaml`](manifests/frontend.yaml) adds the
+`/config/integrations/frontend.yaml` package and the `Zuhause` YAML dashboard
+(`/dashboard-zuhause`; views Übersicht, Räume, Energie, System). The package
+sets the HACS Catppuccin theme as the server default on every start (Latte in
+light mode, Mocha in dark mode). A theme picked in a browser's profile
+overrides that default, so set it back to the backend-selected theme there.
+
+The dashboard is read-only in the UI. Edit the `home-assistant-dashboards`
+ConfigMap; the directory mount picks up changes without a restart. Changes to
+the package need a Home Assistant restart. Before adding a card, check that its
+entities exist in the entity registry. Area cards only offer light and shutter
+controls, because an area-wide switch control would also cut power to the
+fridge and the servers.
+
 ## Shelly VLAN 20 migration
 
 [`scripts/migrate_shelly_wifi.py`](scripts/migrate_shelly_wifi.py) discovers
