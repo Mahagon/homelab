@@ -364,6 +364,13 @@ spec:
               mountPath: /config/integrations/alexa.yaml
               subPath: alexa.yaml
               readOnly: true
+            - name: frontend-config
+              mountPath: /config/integrations/frontend.yaml
+              subPath: frontend.yaml
+              readOnly: true
+            - name: dashboards
+              mountPath: /config/dashboards
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -387,6 +394,12 @@ spec:
         - name: alexa-config
           configMap:
             name: home-assistant-alexa-config
+        - name: frontend-config
+          configMap:
+            name: home-assistant-frontend-config
+        - name: dashboards
+          configMap:
+            name: home-assistant-dashboards
 ---
 apiVersion: v1
 kind: Service

@@ -1,0 +1,1349 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-frontend-config
+  namespace: home-assistant
+data:
+  frontend.yaml: |
+    # Catppuccin (installed via HACS into /config/themes/catppuccin) as the
+    # server-wide default theme: Latte in light mode, Mocha in dark mode.
+    # frontend.set_theme persists the choice; re-applying it on every start keeps
+    # it declarative. Browsers with a theme picked in the profile override it.
+    automation:
+      - id: catppuccin_default_theme
+        alias: Catppuccin als Standard-Theme
+        mode: single
+        triggers:
+          - trigger: homeassistant
+            event: start
+        actions:
+          - action: frontend.set_theme
+            data:
+              name: Catppuccin Latte
+              name_dark: Catppuccin Mocha
+
+    # YAML dashboards are read-only in the UI; edit home-assistant-dashboards.
+    lovelace:
+      dashboards:
+        dashboard-zuhause:
+          mode: yaml
+          title: Zuhause
+          icon: mdi:home-heart
+          show_in_sidebar: true
+          require_admin: false
+          filename: dashboards/zuhause.yaml
+---
+# Mounted as a directory (no subPath), so edits reach the pod without a
+# restart; reload the browser to see them. Area cards only offer light and
+# shutter controls: an area-wide switch control would also cut power to the
+# fridge or the servers.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-dashboards
+  namespace: home-assistant
+data:
+  zuhause.yaml: |
+    title: Zuhause
+    views:
+      - title: Übersicht
+        path: start
+        icon: mdi:home
+        type: sections
+        max_columns: 4
+        dense_section_placement: true
+        header:
+          layout: center
+          badges_position: bottom
+          badges_wrap: wrap
+          card:
+            type: markdown
+            text_only: true
+            content: |
+              {%- set h = now().hour -%}
+              {%- set gruss = 'Gute Nacht' if h < 5 else 'Guten Morgen' if h < 11 else 'Guten Tag' if h < 18 else 'Guten Abend' -%}
+              {%- set tage = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'] -%}
+              {%- set monate = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'] -%}
+              {%- set wetter = {'clear-night': 'Klare Nacht', 'cloudy': 'Bewölkt', 'exceptional': 'Unwetter', 'fog': 'Nebel', 'hail': 'Hagel', 'lightning': 'Gewitter', 'lightning-rainy': 'Gewitter mit Regen', 'partlycloudy': 'Teilweise bewölkt', 'pouring': 'Starkregen', 'rainy': 'Regen', 'snowy': 'Schnee', 'snowy-rainy': 'Schneeregen', 'sunny': 'Sonnig', 'windy': 'Windig', 'windy-variant': 'Windig und bewölkt'} -%}
+              {%- set zustand = states('weather.messingen_wetter') -%}
+              {%- set lichter = ['light.licht', 'light.licht_2', 'light.licht_3', 'light.licht_4', 'switch.treppenbeleuchtung'] | select('is_state', 'on') | list | count -%}
+              {%- set rollos = ['cover.rolladen', 'cover.rolladen_2', 'cover.rolladen_3', 'cover.rolladen_4', 'cover.rolladen_5', 'cover.rolladen_6', 'cover.rolladen_7', 'cover.rolladen_8', 'cover.rolladen_9'] | select('is_state', 'open') | list | count -%}
+              {%- set muell = state_attr('calendar.mullabfuhr', 'message') -%}
+              {%- set muell_start = state_attr('calendar.mullabfuhr', 'start_time') -%}
+              # {{ gruss }}, Daniel
+              {{ tage[now().weekday()] }}, {{ now().day }}. {{ monate[now().month - 1] }} · {{ wetter.get(zustand, zustand) }}, {{ states('sensor.lingen_baccum_temperatur') | float(0) | round(0) | int }} °C
+
+              <ha-icon icon="mdi:lightbulb-on-outline"></ha-icon> {{ lichter }} {{ 'Licht' if lichter == 1 else 'Lichter' }} an · <ha-icon icon="mdi:window-shutter-open"></ha-icon> {{ rollos }} {{ 'Rollladen' if rollos == 1 else 'Rollläden' }} offen
+              {%- if muell and muell_start %}
+              {%- set tage_bis = (as_datetime(muell_start).date() - now().date()).days %} · <ha-icon icon="mdi:trash-can-outline"></ha-icon> {{ muell }} {{ 'heute' if tage_bis == 0 else 'morgen' if tage_bis == 1 else 'am ' ~ as_datetime(muell_start).strftime('%d.%m.') }}
+              {%- endif %}
+        badges:
+          - type: entity
+            entity: person.mahagon
+            show_name: false
+            show_state: true
+            show_icon: true
+          - type: entity
+            entity: sensor.total_dc_power
+            name: Solar
+            icon: mdi:solar-power-variant
+            color: amber
+            show_name: true
+            show_state: true
+            show_icon: true
+          - type: entity
+            entity: sensor.battery_level
+            name: Akku
+            icon: mdi:home-battery
+            color: green
+            show_name: true
+            show_state: true
+            show_icon: true
+          - type: entity
+            entity: sensor.load_power
+            name: Verbrauch
+            icon: mdi:home-lightning-bolt
+            color: blue
+            show_name: true
+            show_state: true
+            show_icon: true
+          - type: entity
+            entity: sensor.import_power
+            name: Netzbezug
+            icon: mdi:transmission-tower-import
+            color: red
+            show_name: true
+            show_state: true
+            show_icon: true
+            visibility:
+              - condition: numeric_state
+                entity: sensor.import_power
+                above: 50
+          - type: entity
+            entity: sensor.export_power
+            name: Einspeisung
+            icon: mdi:transmission-tower-export
+            color: teal
+            show_name: true
+            show_state: true
+            show_icon: true
+            visibility:
+              - condition: numeric_state
+                entity: sensor.export_power
+                above: 50
+          - type: entity
+            entity: sensor.https_paperless_danieljacobs_de_dokumente_im_posteingang
+            name: Posteingang
+            icon: mdi:inbox-full
+            color: purple
+            show_name: true
+            show_state: true
+            show_icon: true
+            visibility:
+              - condition: numeric_state
+                entity: sensor.https_paperless_danieljacobs_de_dokumente_im_posteingang
+                above: 0
+          - type: entity
+            entity: binary_sensor.luftbefeuchter_wasserstand_niedrig
+            name: Luftbefeuchter
+            icon: mdi:water-alert
+            color: orange
+            show_name: true
+            show_state: false
+            show_icon: true
+            visibility:
+              - condition: state
+                entity: binary_sensor.luftbefeuchter_wasserstand_niedrig
+                state: 'on'
+        sections:
+          - type: grid
+            column_span: 4
+            visibility:
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity: binary_sensor.nina_warning_messingen_emsland_niedersachsen_1
+                    state: 'on'
+                  - condition: state
+                    entity: binary_sensor.nina_warning_messingen_emsland_niedersachsen_2
+                    state: 'on'
+            cards:
+              - type: heading
+                heading: Warnungen
+                icon: mdi:alert
+              - type: markdown
+                grid_options:
+                  columns: full
+                content: |
+                  {%- for e in ['binary_sensor.nina_warning_messingen_emsland_niedersachsen_1', 'binary_sensor.nina_warning_messingen_emsland_niedersachsen_2'] if is_state(e, 'on') %}
+                  <ha-alert alert-type="warning" title="{{ state_attr(e, 'headline') }}">{{ state_attr(e, 'description') }}</ha-alert>
+                  {%- endfor %}
+          - type: grid
+            cards:
+              - type: heading
+                heading: Licht
+                icon: mdi:lightbulb-group
+              - type: tile
+                entity: light.wohnraum_licht
+                name: Wohnraum komplett
+                icon: mdi:home-lightbulb
+                state_content:
+                  - state
+                  - brightness
+                features_position: inline
+                features:
+                  - type: light-brightness
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: light.licht_2
+                name: Wohnzimmer
+                icon: mdi:sofa
+                features:
+                  - type: light-brightness
+              - type: tile
+                entity: light.licht
+                name: Esszimmer
+                icon: mdi:silverware-fork-knife
+                features:
+                  - type: light-brightness
+              - type: tile
+                entity: light.licht_3
+                name: Küche
+                icon: mdi:stove
+                features:
+                  - type: light-brightness
+              - type: tile
+                entity: light.licht_4
+                name: Büro
+                icon: mdi:desk-lamp
+                features:
+                  - type: light-brightness
+              - type: tile
+                entity: switch.treppenbeleuchtung
+                name: Treppe
+                icon: mdi:stairs
+                color: amber
+              - type: tile
+                entity: switch.weihnachtsbaum
+                name: Weihnachtsbaum
+                icon: mdi:pine-tree
+                color: green
+          - type: grid
+            cards:
+              - type: heading
+                heading: Rollläden
+                icon: mdi:window-shutter
+              - type: tile
+                entity: cover.shutters
+                name: Alle Rollläden
+                icon: mdi:window-shutter-auto
+                features_position: inline
+                features:
+                  - type: cover-open-close
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: input_button.fernsehen
+                name: Fernsehen
+                icon: mdi:television-classic
+                color: deep-purple
+                hide_state: true
+                tap_action:
+                  action: perform-action
+                  perform_action: input_button.press
+                  target:
+                    entity_id: input_button.fernsehen
+                icon_tap_action:
+                  action: perform-action
+                  perform_action: input_button.press
+                  target:
+                    entity_id: input_button.fernsehen
+                grid_options:
+                  columns: 12
+              - type: heading
+                heading: Erdgeschoss
+                heading_style: subtitle
+              - type: tile
+                entity: cover.rolladen
+                name: Küche
+                features:
+                  - type: cover-open-close
+              - type: tile
+                entity: cover.rolladen_2
+                name: Esszimmer
+                features:
+                  - type: cover-open-close
+              - type: tile
+                entity: cover.rolladen_6
+                name: Büro
+                features:
+                  - type: cover-open-close
+              - type: tile
+                entity: cover.rolladen_3
+                name: Gäste-WC
+                features:
+                  - type: cover-open-close
+              - type: heading
+                heading: Obergeschoss
+                heading_style: subtitle
+              - type: tile
+                entity: cover.rolladen_4
+                name: Schlafzimmer
+                features:
+                  - type: cover-open-close
+              - type: tile
+                entity: cover.rolladen_5
+                name: Ankleide
+                features:
+                  - type: cover-open-close
+              - type: tile
+                entity: cover.rolladen_8
+                name: Büro Privat
+                features:
+                  - type: cover-open-close
+              - type: tile
+                entity: cover.rolladen_7
+                name: Gästezimmer
+                features:
+                  - type: cover-open-close
+              - type: tile
+                entity: cover.rolladen_9
+                name: Badezimmer
+                features:
+                  - type: cover-open-close
+          - type: grid
+            cards:
+              - type: heading
+                heading: Energie
+                icon: mdi:lightning-bolt
+                tap_action:
+                  action: navigate
+                  navigation_path: /dashboard-zuhause/energie
+                badges:
+                  - type: entity
+                    entity: sensor.daily_pv_generation
+                    name: Erzeugt
+                    icon: mdi:solar-power-variant
+                    color: amber
+                    show_state: true
+                    show_icon: true
+                  - type: entity
+                    entity: sensor.daily_consumed_energy
+                    name: Verbraucht
+                    icon: mdi:home-lightning-bolt
+                    color: blue
+                    show_state: true
+                    show_icon: true
+              - type: tile
+                entity: sensor.total_dc_power
+                name: Photovoltaik
+                icon: mdi:solar-power-variant
+                color: amber
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: sensor.load_power
+                name: Hausverbrauch
+                icon: mdi:home-lightning-bolt
+                color: blue
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: sensor.battery_level
+                name: Batteriespeicher
+                icon: mdi:home-battery
+                color: green
+                features:
+                  - type: bar-gauge
+                    min: 0
+                    max: 100
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: sensor.battery_charging_power
+                name: Akku lädt
+                icon: mdi:battery-charging
+                color: green
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.battery_charging_power
+                    above: 0
+              - type: tile
+                entity: sensor.battery_discharging_power
+                name: Akku entlädt
+                icon: mdi:battery-arrow-down
+                color: orange
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.battery_discharging_power
+                    above: 0
+              - type: tile
+                entity: sensor.import_power
+                name: Netzbezug
+                icon: mdi:transmission-tower-import
+                color: red
+              - type: tile
+                entity: sensor.export_power
+                name: Einspeisung
+                icon: mdi:transmission-tower-export
+                color: teal
+          - type: grid
+            cards:
+              - type: heading
+                heading: Wetter
+                icon: mdi:weather-partly-cloudy
+                badges:
+                  - type: entity
+                    entity: sensor.lingen_baccum_niederschlagswahrscheinlichkeit
+                    icon: mdi:umbrella-outline
+                    color: blue
+                    show_state: true
+                    show_icon: true
+                  - type: entity
+                    entity: sensor.lingen_baccum_windgeschwindigkeit
+                    icon: mdi:weather-windy
+                    color: cyan
+                    show_state: true
+                    show_icon: true
+              - type: weather-forecast
+                entity: weather.messingen_wetter
+                forecast_type: daily
+                show_current: true
+                show_forecast: true
+                grid_options:
+                  columns: full
+              - type: tile
+                entity: sensor.messingen_wetter_radar_nachster_niederschlag
+                name: Nächster Regen (Radar)
+                icon: mdi:weather-pouring
+                color: blue
+                grid_options:
+                  columns: 12
+                visibility:
+                  - condition: state
+                    entity: sensor.messingen_wetter_radar_nachster_niederschlag
+                    state_not:
+                      - unavailable
+                      - unknown
+          - type: grid
+            cards:
+              - type: heading
+                heading: Steckdosen
+                icon: mdi:power-socket-de
+              - type: tile
+                entity: switch.pc
+                name: PC Büro
+                icon: mdi:desktop-tower-monitor
+                color: indigo
+              - type: tile
+                entity: switch.computer
+                name: PC Büro Privat
+                icon: mdi:desktop-tower
+                color: indigo
+              - type: tile
+                entity: switch.computer_2
+                name: Computer HWR
+                icon: mdi:server
+                color: indigo
+                icon_tap_action:
+                  action: toggle
+                  confirmation:
+                    text: Computer im Hauswirtschaftsraum wirklich schalten?
+              - type: tile
+                entity: switch.mobil_1
+                name: Kühlschrank
+                icon: mdi:fridge
+                color: light-blue
+                icon_tap_action:
+                  action: toggle
+                  confirmation:
+                    text: Kühlschrank wirklich schalten?
+              - type: tile
+                entity: switch.spulmaschine
+                name: Spülmaschine
+                icon: mdi:dishwasher
+                color: cyan
+                icon_tap_action:
+                  action: toggle
+                  confirmation:
+                    text: Steckdose der Spülmaschine wirklich schalten?
+              - type: tile
+                entity: switch.waschtrockner
+                name: Waschtrockner
+                icon: mdi:washing-machine
+                color: cyan
+                icon_tap_action:
+                  action: toggle
+                  confirmation:
+                    text: Steckdose des Waschtrockners wirklich schalten?
+              - type: tile
+                entity: switch.heizungspumpe
+                name: Heizungspumpe
+                icon: mdi:pump
+                color: deep-orange
+                icon_tap_action:
+                  action: toggle
+                  confirmation:
+                    text: Heizungspumpe wirklich schalten?
+          - type: grid
+            cards:
+              - type: heading
+                heading: Haushalt
+                icon: mdi:home-heart
+              - type: tile
+                entity: sensor.geschirrspuler_betriebszustand
+                name: Geschirrspüler
+                icon: mdi:dishwasher
+                color: cyan
+              - type: tile
+                entity: sensor.geschirrspuler_tur
+                name: Tür
+                icon: mdi:door
+              - type: tile
+                entity: sensor.geschirrspuler_programm_fortschritt
+                name: Programmfortschritt
+                icon: mdi:progress-clock
+                color: cyan
+                features:
+                  - type: bar-gauge
+                    min: 0
+                    max: 100
+                grid_options:
+                  columns: 12
+                visibility:
+                  - condition: state
+                    entity: sensor.geschirrspuler_programm_fortschritt
+                    state_not:
+                      - unavailable
+                      - unknown
+              - type: tile
+                entity: sensor.geschirrspuler_programm_endzeit
+                name: Fertig um
+                icon: mdi:clock-end
+                grid_options:
+                  columns: 12
+                visibility:
+                  - condition: state
+                    entity: sensor.geschirrspuler_programm_endzeit
+                    state_not:
+                      - unavailable
+                      - unknown
+              - type: tile
+                entity: sensor.kochfeld_betriebszustand
+                name: Kochfeld
+                icon: mdi:stove
+                color: deep-orange
+              - type: tile
+                entity: switch.kochfeld_kindersicherung
+                name: Kindersicherung
+                icon: mdi:lock
+                color: red
+              - type: tile
+                entity: input_boolean.input_boolean_washing_machine_active
+                name: Waschtrockner läuft
+                icon: mdi:washing-machine
+                color: cyan
+              - type: tile
+                entity: sensor.waschtrockner_leistung
+                name: Waschtrockner
+                icon: mdi:flash
+                color: cyan
+                features:
+                  - type: trend-graph
+                    hours_to_show: 12
+          - type: grid
+            cards:
+              - type: heading
+                heading: Saugroboter
+                icon: mdi:robot-vacuum
+                badges:
+                  - type: entity
+                    entity: sensor.technikraum_robby_oben_batterie
+                    name: Oben
+                    show_name: true
+                    show_state: true
+                    show_icon: true
+                  - type: entity
+                    entity: sensor.flur_robby_unten_batterie
+                    name: Unten
+                    show_name: true
+                    show_state: true
+                    show_icon: true
+              - type: tile
+                entity: vacuum.robby_oben
+                name: Robby Oben
+                icon: mdi:robot-vacuum-variant
+                color: purple
+                features:
+                  - type: vacuum-commands
+                    commands:
+                      - start_pause
+                      - stop
+                      - return_home
+                      - locate
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: vacuum.roborock_vacuum_s5
+                name: Robby Unten
+                icon: mdi:robot-vacuum
+                color: purple
+                features:
+                  - type: vacuum-commands
+                    commands:
+                      - start_pause
+                      - stop
+                      - return_home
+                      - locate
+                grid_options:
+                  columns: 12
+          - type: grid
+            cards:
+              - type: heading
+                heading: Klima
+                icon: mdi:home-thermometer
+              - type: tile
+                entity: sensor.lingen_baccum_temperatur
+                name: Außen
+                icon: mdi:thermometer
+                color: light-blue
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: sensor.daniels_echo_temperatur
+                name: Wohnzimmer
+                icon: mdi:sofa
+                color: orange
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: sensor.temperatur_und_feuchtigkeitssensor_temperatur
+                name: Schlafzimmer
+                icon: mdi:bed
+                color: orange
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: sensor.temperatur_und_feuchtigkeitssensor_luftfeuchtigkeit
+                name: Luftfeuchte Schlafzimmer
+                icon: mdi:water-percent
+                color: blue
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: humidifier.luftbefeuchter
+                name: Luftbefeuchter
+                icon: mdi:air-humidifier
+                color: blue
+                state_content:
+                  - state
+                  - current_humidity
+                features:
+                  - type: target-humidity
+                grid_options:
+                  columns: 12
+          - type: grid
+            cards:
+              - type: heading
+                heading: Echo & Medien
+                icon: mdi:speaker-multiple
+              - type: tile
+                entity: media_player.uberall_alle_echos
+                name: Alle Echos
+                icon: mdi:speaker-multiple
+                color: pink
+                features_position: inline
+                features:
+                  - type: media-player-volume-slider
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: media_player.wohnzimmer_wohnzimmer_echo
+                name: Wohnzimmer
+                icon: mdi:speaker
+                color: pink
+                features_position: inline
+                features:
+                  - type: media-player-volume-slider
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: media_player.badezimmer_badezimmer_echo_dot
+                name: Badezimmer
+                icon: mdi:speaker
+                color: pink
+                features_position: inline
+                features:
+                  - type: media-player-volume-slider
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: media_player.buro_privat_buro_privat_echo_dot
+                name: Büro Privat
+                icon: mdi:speaker
+                color: pink
+                features_position: inline
+                features:
+                  - type: media-player-volume-slider
+                grid_options:
+                  columns: 12
+              - type: heading
+                heading: Bitte nicht stören
+                heading_style: subtitle
+              - type: tile
+                entity: switch.daniels_echo_bitte_nicht_storen
+                name: Wohnzimmer
+                icon: mdi:minus-circle
+                color: red
+                vertical: true
+                grid_options:
+                  columns: 4
+              - type: tile
+                entity: switch.daniels_2_echo_dot_bitte_nicht_storen
+                name: Bad
+                icon: mdi:minus-circle
+                color: red
+                vertical: true
+                grid_options:
+                  columns: 4
+              - type: tile
+                entity: switch.daniels_echo_dot_bitte_nicht_storen
+                name: Büro Privat
+                icon: mdi:minus-circle
+                color: red
+                vertical: true
+                grid_options:
+                  columns: 4
+          - type: grid
+            cards:
+              - type: heading
+                heading: Termine
+                icon: mdi:calendar-month
+              - type: calendar
+                initial_view: listWeek
+                entities:
+                  - calendar.mullabfuhr
+                  - calendar.deutschland_ni
+                grid_options:
+                  columns: full
+              - type: heading
+                heading: Einkaufsliste
+                icon: mdi:cart-outline
+              - type: todo-list
+                entity: todo.mail_amazon_danieljacobs_de_einkaufsliste
+                hide_completed: true
+                grid_options:
+                  columns: full
+      - title: Räume
+        path: raeume
+        icon: mdi:floor-plan
+        type: sections
+        max_columns: 3
+        sections:
+          - type: grid
+            cards:
+              - type: heading
+                heading: Erdgeschoss
+                icon: mdi:home-floor-0
+              - type: area
+                area: living_room
+                display_type: compact
+                sensor_classes: &id001
+                  - temperature
+                  - humidity
+                alert_classes: &id002
+                  - moisture
+                  - motion
+                  - problem
+                features_position: bottom
+                features: &id003
+                  - type: area-controls
+                    controls:
+                      - light
+                      - cover-shutter
+                grid_options: &id004
+                  columns: 6
+              - type: area
+                area: kitchen
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: esszimmer
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: buro
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: flur
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: hauswirtschaftsraum
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: gaste_wc
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+          - type: grid
+            cards:
+              - type: heading
+                heading: Obergeschoss
+                icon: mdi:home-floor-1
+              - type: area
+                area: bedroom
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: badezimmer
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: ankleidezimmer
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: buro_privat
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: gastezimmer
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: technikraum
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+          - type: grid
+            cards:
+              - type: heading
+                heading: Dachboden & Außen
+                icon: mdi:home-roof
+              - type: area
+                area: dachboden
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+              - type: area
+                area: gerateraum
+                display_type: compact
+                sensor_classes: *id001
+                alert_classes: *id002
+                features_position: bottom
+                features: *id003
+                grid_options: *id004
+      - title: Energie
+        path: energie
+        icon: mdi:solar-power-variant
+        type: sections
+        max_columns: 4
+        sections:
+          - type: grid
+            column_span: 2
+            cards:
+              - type: heading
+                heading: Energiefluss
+                icon: mdi:transmission-tower
+              - type: energy-date-selection
+                grid_options:
+                  columns: full
+              - type: energy-distribution
+                link_dashboard: true
+                grid_options:
+                  columns: full
+          - type: grid
+            cards:
+              - type: heading
+                heading: Batteriespeicher
+                icon: mdi:home-battery
+              - type: gauge
+                entity: sensor.battery_level
+                name: Ladestand
+                min: 0
+                max: 100
+                needle: true
+                severity:
+                  green: 50
+                  yellow: 20
+                  red: 0
+                grid_options:
+                  columns: full
+              - type: tile
+                entity: sensor.battery_charging_power
+                name: Laden
+                icon: mdi:battery-charging
+                color: green
+              - type: tile
+                entity: sensor.battery_discharging_power
+                name: Entladen
+                icon: mdi:battery-arrow-down
+                color: orange
+              - type: tile
+                entity: sensor.battery_temperature
+                name: Batterie
+                icon: mdi:thermometer
+                color: amber
+              - type: tile
+                entity: sensor.inverter_temperature
+                name: Wechselrichter
+                icon: mdi:thermometer
+                color: amber
+          - type: grid
+            cards:
+              - type: heading
+                heading: Live-Leistung
+                icon: mdi:flash
+              - type: tile
+                entity: sensor.total_dc_power
+                name: Photovoltaik
+                icon: mdi:solar-power-variant
+                color: amber
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: sensor.load_power
+                name: Hausverbrauch
+                icon: mdi:home-lightning-bolt
+                color: blue
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: sensor.import_power
+                name: Netzbezug
+                icon: mdi:transmission-tower-import
+                color: red
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: sensor.export_power
+                name: Einspeisung
+                icon: mdi:transmission-tower-export
+                color: teal
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+          - type: grid
+            column_span: 2
+            cards:
+              - type: heading
+                heading: Verlauf
+                icon: mdi:chart-line
+              - type: history-graph
+                title: Leistung (24 h)
+                hours_to_show: 24
+                entities:
+                  - entity: sensor.total_dc_power
+                    name: Photovoltaik
+                  - entity: sensor.load_power
+                    name: Hausverbrauch
+                  - entity: sensor.import_power
+                    name: Netzbezug
+                  - entity: sensor.export_power
+                    name: Einspeisung
+                grid_options:
+                  columns: full
+              - type: statistics-graph
+                title: Erzeugung und Verbrauch pro Tag
+                chart_type: bar
+                period: day
+                days_to_show: 14
+                stat_types:
+                  - change
+                entities:
+                  - entity: sensor.total_pv_generation
+                    name: Erzeugung
+                  - entity: sensor.total_consumed_energy
+                    name: Verbrauch
+                  - entity: sensor.total_imported_energy
+                    name: Netzbezug
+                  - entity: sensor.total_exported_energy
+                    name: Einspeisung
+                grid_options:
+                  columns: full
+          - type: grid
+            cards:
+              - type: heading
+                heading: Solarprognose
+                icon: mdi:weather-sunny
+              - type: tile
+                entity: sensor.solcast_pv_forecast_prognose_heute
+                name: Heute
+                icon: mdi:solar-power-variant
+                color: amber
+              - type: tile
+                entity: sensor.solcast_pv_forecast_prognose_morgen
+                name: Morgen
+                icon: mdi:solar-power-variant-outline
+                color: amber
+              - type: tile
+                entity: sensor.solcast_pv_forecast_aktuelle_leistung
+                name: Jetzt erwartet
+                icon: mdi:weather-sunny
+                color: yellow
+              - type: tile
+                entity: sensor.solcast_pv_forecast_leistung_in_1_stunde
+                name: In 1 Stunde
+                icon: mdi:weather-sunset-down
+                color: yellow
+              - type: tile
+                entity: sensor.solcast_pv_forecast_prognose_spitzenleistung_heute
+                name: Spitze heute
+                icon: mdi:chart-bell-curve
+                color: orange
+                grid_options:
+                  columns: 12
+              - type: heading
+                heading: Wechselrichter steuern
+                heading_style: subtitle
+                icon: mdi:tune-variant
+                tap_action:
+                  action: navigate
+                  navigation_path: /dashboard-sungrow
+          - type: grid
+            column_span: 2
+            cards:
+              - type: heading
+                heading: Verbraucher
+                icon: mdi:power-plug
+              - type: tile
+                entity: sensor.mobil_1_leistung
+                name: Kühlschrank
+                icon: mdi:fridge
+                color: light-blue
+                grid_options: &id005
+                  columns: 4
+              - type: tile
+                entity: sensor.spulmaschine_leistung
+                name: Spülmaschine
+                icon: mdi:dishwasher
+                color: cyan
+                grid_options: *id005
+              - type: tile
+                entity: sensor.waschtrockner_leistung
+                name: Waschtrockner
+                icon: mdi:washing-machine
+                color: cyan
+                grid_options: *id005
+              - type: tile
+                entity: sensor.backofen_leistung
+                name: Backofen
+                icon: mdi:stove
+                color: deep-orange
+                grid_options: *id005
+              - type: tile
+                entity: sensor.mikrowelle_leistung
+                name: Mikrowelle
+                icon: mdi:microwave
+                color: deep-orange
+                grid_options: *id005
+              - type: tile
+                entity: sensor.steckdosen_kuchenzeile_leistung
+                name: Küchenzeile
+                icon: mdi:power-socket-de
+                color: deep-orange
+                grid_options: *id005
+              - type: tile
+                entity: sensor.fernseher_steckerleiste_rechts_leistung
+                name: Fernseher
+                icon: mdi:television
+                color: pink
+                grid_options: *id005
+              - type: tile
+                entity: sensor.home_lab_leistung
+                name: Home Lab
+                icon: mdi:server-network
+                color: indigo
+                grid_options: *id005
+              - type: tile
+                entity: sensor.computer_leistung_2
+                name: Computer HWR
+                icon: mdi:server
+                color: indigo
+                grid_options: *id005
+              - type: tile
+                entity: sensor.pc_leistung
+                name: PC Büro
+                icon: mdi:desktop-tower-monitor
+                color: indigo
+                grid_options: *id005
+              - type: tile
+                entity: sensor.computer_leistung
+                name: PC Büro Privat
+                icon: mdi:desktop-tower
+                color: indigo
+                grid_options: *id005
+              - type: tile
+                entity: sensor.heizungspumpe_leistung
+                name: Heizungspumpe
+                icon: mdi:pump
+                color: red
+                grid_options: *id005
+              - type: tile
+                entity: sensor.beluftungsanlage_leistung
+                name: Belüftung
+                icon: mdi:hvac
+                color: teal
+                grid_options: *id005
+              - type: tile
+                entity: sensor.licht_leistung_2
+                name: Licht Wohnzimmer
+                icon: mdi:lightbulb
+                color: amber
+                grid_options: *id005
+              - type: tile
+                entity: sensor.licht_leistung
+                name: Licht Esszimmer
+                icon: mdi:lightbulb
+                color: amber
+                grid_options: *id005
+              - type: tile
+                entity: sensor.licht_leistung_3
+                name: Licht Küche
+                icon: mdi:lightbulb
+                color: amber
+                grid_options: *id005
+      - title: System
+        path: system
+        icon: mdi:cog-outline
+        type: sections
+        max_columns: 3
+        sections:
+          - type: grid
+            column_span: 2
+            cards:
+              - type: heading
+                heading: Automationen
+                icon: mdi:robot-outline
+              - type: heading
+                heading: Rollläden
+                heading_style: subtitle
+              - type: tile
+                entity: automation.shutters_open_on_sunrise
+                name: Morgens öffnen (7 Uhr)
+                icon: mdi:window-shutter-open
+                color: green
+                grid_options: &id006
+                  columns: 6
+              - type: tile
+                entity: automation.shutters_bedrooms_open_in_the_morning
+                name: Schlafräume morgens öffnen
+                icon: mdi:bed-clock
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.shutters_closed_on_sunset
+                name: Bei Sonnenuntergang schließen
+                icon: mdi:weather-sunset
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.fernsehen
+                name: Fernsehen
+                icon: mdi:television-classic
+                color: green
+                grid_options: *id006
+              - type: heading
+                heading: Geräte
+                heading_style: subtitle
+              - type: tile
+                entity: automation.heating_pump_on
+                name: Heizungspumpe an
+                icon: mdi:pump
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.heating_pump_off
+                name: Heizungspumpe aus
+                icon: mdi:pump-off
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.outlet_office_on
+                name: PC Büro an
+                icon: mdi:desktop-tower-monitor
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.outlet_office_off
+                name: PC Büro aus
+                icon: mdi:desktop-tower-monitor
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.outlet_office_private_off
+                name: PC Büro Privat aus
+                icon: mdi:desktop-tower
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.washingmachine_finished
+                name: Waschtrockner fertig
+                icon: mdi:washing-machine-alert
+                color: green
+                grid_options: *id006
+              - type: heading
+                heading: Weihnachten
+                heading_style: subtitle
+              - type: tile
+                entity: automation.eine_stunde_vor_sonnenuntergang
+                name: Weihnachtsbaum an
+                icon: mdi:pine-tree
+                color: green
+                grid_options: *id006
+              - type: tile
+                entity: automation.christmas_tree_off
+                name: Weihnachtsbaum aus
+                icon: mdi:pine-tree-variant-outline
+                color: green
+                grid_options: *id006
+          - type: grid
+            cards:
+              - type: heading
+                heading: Backup
+                icon: mdi:backup-restore
+              - type: tile
+                entity: sensor.backup_backup_manager_state
+                name: Status
+                icon: mdi:backup-restore
+                color: green
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: sensor.backup_last_successful_automatic_backup
+                name: Letztes Backup
+                icon: mdi:check-circle-outline
+                color: green
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: sensor.backup_next_scheduled_automatic_backup
+                name: Nächstes Backup
+                icon: mdi:calendar-clock
+                grid_options:
+                  columns: 12
+              - type: heading
+                heading: Paperless
+                icon: mdi:file-document-multiple-outline
+              - type: tile
+                entity: sensor.https_paperless_danieljacobs_de_dokumente_im_posteingang
+                name: Posteingang
+                icon: mdi:inbox
+                color: purple
+              - type: tile
+                entity: sensor.https_paperless_danieljacobs_de_dokumente_insgesamt
+                name: Dokumente
+                icon: mdi:file-document-multiple
+                color: purple
+          - type: grid
+            cards:
+              - type: heading
+                heading: Netzwerk-LEDs
+                icon: mdi:access-point
+              - type: tile
+                entity: light.unifi_ap_treppe_led
+                name: AP Treppe
+                icon: mdi:access-point
+                color: blue
+              - type: tile
+                entity: light.technic_room_led
+                name: AP Technikraum
+                icon: mdi:access-point
+                color: blue
+              - type: tile
+                entity: light.outdoors_led
+                name: AP Außen
+                icon: mdi:access-point
+                color: blue
+              - type: tile
+                entity: light.addic_switch_led
+                name: Switch Dachboden
+                icon: mdi:switch
+                color: blue
+          - type: grid
+            cards:
+              - type: heading
+                heading: Smartphone
+                icon: mdi:cellphone
+              - type: tile
+                entity: person.mahagon
+                name: Daniel
+                grid_options:
+                  columns: 12
+              - type: tile
+                entity: sensor.pixel_9a_battery_level
+                name: Pixel 9a
+                icon: mdi:cellphone
+                color: green
+                features:
+                  - type: bar-gauge
+                    min: 0
+                    max: 100
+                grid_options:
+                  columns: 12
