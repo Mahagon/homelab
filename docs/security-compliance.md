@@ -79,7 +79,7 @@ appear compliant.
 | Threat | Control |
 |---|---|
 | Internet scanning of the home network | Tunnel is outbound-only; no Home Assistant WAN NAT/port forward. |
-| Bypass of public authentication | Home Assistant authentication/MFA remains mandatory; unauthenticated `/api/` returns 401. Vaultwarden has signups disabled, relies on its own authentication and two-step login, and its `/admin` panel is blocked at the edge. Jellyfin relies on its own password login (no built-in two-factor); only the separate `jellyfin-remote` hostname is published, and it is rate-limited and Germany-only. |
+| Bypass of public authentication | Home Assistant authentication/MFA remains mandatory; unauthenticated `/api/` returns 401. Vaultwarden has signups disabled, relies on its own authentication and two-step login, and its `/admin` panel is blocked at the edge. Jellyfin relies on its own password login (no built-in two-factor); only the separate `jellyfin-remote` hostname is published, and it is rate-limited and Germany-only, and its admin API is blocked at the edge so administration requires the LAN. |
 | Stolen Alexa OAuth token | Lambda neither stores nor logs tokens and forwards them only to the fixed HTTPS Home Assistant endpoint. |
 | Arbitrary Lambda invocation | Resource permission requires the Alexa Smart Home service principal and exact Skill ID. |
 | Lambda cost amplification | Eight-second timeout, 256 MB memory, and the AWS account-level concurrency quota. |
