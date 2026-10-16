@@ -15,6 +15,15 @@ clients can sync away from home. It shares the connectors, the edge rulesets,
 and the `publish_dns` switch described here; its differences are called out in
 the relevant sections.
 
+It also publishes Jellyfin at `jellyfin-remote.<your-domain>` for phones away
+from home. `jellyfin.<your-domain>` stays LAN-only: ExternalDNS publishes the
+node's private address and Traefik serves it with the Let's Encrypt
+certificate, so home streaming never leaves the LAN. Cloudflare's Free-plan
+terms do not permit serving video through the CDN; this is an accepted risk,
+and enforcement would affect the whole Cloudflare account, including Home
+Assistant, Alexa, and Vaultwarden. Remove the Jellyfin route first if
+Cloudflare raises it.
+
 The infrastructure is intentionally split into three trust domains:
 
 - OpenTofu manages AWS, Cloudflare Tunnel configuration, and public DNS.
@@ -276,7 +285,7 @@ Both replicas must be Ready. In Cloudflare, the `home-assistant-k3s` tunnel must
 show Healthy before changing DNS.
 
 The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, Home Assistant
-TCP 8123, and Vaultwarden TCP 8080. If the Home Assistant node address changes, update the `/32` rule in
+TCP 8123, Vaultwarden TCP 8080, and Jellyfin TCP 8096. If the Home Assistant node address changes, update the `/32` rule in
 `k8s/apps/cloudflared/manifests/networkpolicy.yaml` before moving the node.
 
 The UniFi gateway must not have a WAN port-forward or DMZ rule for Home
@@ -344,19 +353,22 @@ configures:
 - blocking of common source-control, secret-file, WordPress, and phpMyAdmin
   reconnaissance paths;
 - a Home Assistant geo allowlist (Germany, plus Amazon's ASNs for Alexa);
-- a Vaultwarden rule that blocks every country except Germany, with no Amazon
-  bypass, and blocks `/admin` so the admin panel is reachable only on the LAN;
+- one shared rule (the Free plan permits only five custom rules) that blocks
+  every country except Germany for Vaultwarden and Jellyfin, with no Amazon
+  bypass, and blocks Vaultwarden's `/admin` so the admin panel is reachable
+  only on the LAN;
 - the Free plan's single rate-limit rule: more than 10 requests to Home
-  Assistant's `/auth/login_flow` path or Vaultwarden's `/identity/connect/token`
-  path from one IP in 10 seconds causes a 10-second block;
-- an explicit cache bypass for every response from either tunnel hostname; and
+  Assistant's `/auth/login_flow` path, Vaultwarden's `/identity/connect/token`
+  path, or Jellyfin's `/Users/AuthenticateByName` path from one IP in 10
+  seconds causes a 10-second block;
+- an explicit cache bypass for every response from each tunnel hostname; and
 - a 30-day hostname-scoped HSTS header without `includeSubDomains` or preload,
   plus `X-Content-Type-Options: nosniff`.
 
 The Free plan does not make `Host` available in rate-limit expressions. The
-rate-limit rule therefore uses Home Assistant's distinctive login-flow path and
-Vaultwarden's login path, and applies to those paths across the `<your-domain>`
-zone. It intentionally excludes
+rate-limit rule therefore uses Home Assistant's distinctive login-flow path,
+Vaultwarden's login path, and Jellyfin's password-login path, and applies to
+those paths across the `<your-domain>` zone. It intentionally excludes
 `/auth/token`, `/api`, WebSocket traffic, and `/api/alexa/smart_home` so normal
 companion-app, OAuth, and Alexa operation is unaffected.
 
@@ -460,6 +472,15 @@ vault.<your-domain>         -> 192.168.178.10
 The Vaultwarden admin panel (`/admin`) is blocked at the Cloudflare edge, so it
 is usable only through this LAN path.
 
+Jellyfin needs no override: `jellyfin.<your-domain>` already resolves to the
+node, and only `jellyfin-remote.<your-domain>` uses the tunnel. In the Jellyfin
+dashboard under **Networking**, set **Known proxies** to `10.42.0.0/16` so the
+client address is taken from `X-Forwarded-For`, and **LAN networks** to
+`192.168.178.0/24`. Confirm under **Dashboard > Activity** that a phone on
+mobile data shows a public address and is treated as remote. Every Jellyfin
+account must have a strong password because Jellyfin has no built-in two-factor
+login.
+
 UniFi changes menu names between releases; look under Settings, DNS, or Local
 DNS Records. Confirm a LAN client resolves the node address while a mobile
 client with Wi-Fi disabled resolves Cloudflare.
@@ -555,7 +576,7 @@ Expected examples:
 - Inspect Lambda logs without dumping events:
   `aws logs tail /aws/lambda/home-assistant-alexa --region eu-west-1`.
 - To roll back to LAN-only access, disable the Alexa development skill and set
-  `publish_dns=false`. This also unpublishes Vaultwarden, which shares the
-  switch. Do not restore an inbound port forward.
+  `publish_dns=false`. This also unpublishes Vaultwarden and
+  `jellyfin-remote`, which share the switch. Do not restore an inbound port forward.
 - Versioned S3 state permits recovery of a prior state object. Restore only
   after copying the current version and reviewing an OpenTofu plan.

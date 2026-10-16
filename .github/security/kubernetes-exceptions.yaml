@@ -47,7 +47,7 @@ exceptions:
       - run-as-non-root
       - drop-all-capabilities
     reason: Jellyfin currently needs privileged access to the host GPU device for hardware transcoding.
-    compensating_control: The pod has no service-account token and is isolated in a dedicated namespace with restricted-policy audit and warning labels.
+    compensating_control: The pod has no service-account token and is isolated in a dedicated namespace with restricted-policy audit and warning labels; a default-deny ingress NetworkPolicy admits only Traefik and cloudflared on TCP 8096, and the public tunnel hostname is Germany-only and rate-limited at the Cloudflare edge.
     expires: 2027-03-11
   - resource: Deployment/kube-system/local-path-provisioner-ssd
     container: "*"

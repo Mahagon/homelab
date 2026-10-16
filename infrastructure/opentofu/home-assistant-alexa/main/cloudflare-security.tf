@@ -1,7 +1,10 @@
 locals {
   home_assistant_waf_scope = "(http.host eq \"${local.home_assistant_hostname}\")"
   vaultwarden_waf_scope    = "(http.host eq \"${local.vaultwarden_hostname}\")"
-  tunnel_waf_scope         = "(http.host in {\"${local.home_assistant_hostname}\" \"${local.vaultwarden_hostname}\"})"
+  jellyfin_waf_scope       = "(http.host eq \"${local.jellyfin_hostname}\")"
+  tunnel_waf_scope         = "(http.host in {\"${local.home_assistant_hostname}\" \"${local.vaultwarden_hostname}\" \"${local.jellyfin_hostname}\"})"
+  # Vaultwarden and Jellyfin share one geo rule, so they share one allowlist.
+  geo_allowlist_scope = "(http.host in {\"${local.vaultwarden_hostname}\" \"${local.jellyfin_hostname}\"})"
 
   home_assistant_allowed_countries = ["DE"]
   # Alexa directives come from the eu-west-1 Lambda (IE) and account linking
@@ -9,14 +12,15 @@ locals {
   # ponytail: whole AWS ASNs, narrow to /api/alexa + /auth/token if abused
   home_assistant_amazon_asns = [16509, 14618]
 
-  vaultwarden_allowed_countries = ["DE"]
+  geo_allowed_countries = ["DE"]
 }
 
 # Cloudflare automatically deploys its Free Managed Ruleset on Free zones. This
 # entry-point ruleset adds custom controls that are safe for Home Assistant's
-# browser, companion-app, WebSocket, OAuth, and Alexa traffic, and for the
-# Vaultwarden web vault and Bitwarden clients. The Free plan permits five custom
-# rules, so the Vaultwarden geo and admin-panel blocks share one rule.
+# browser, companion-app, WebSocket, OAuth, and Alexa traffic, for the
+# Vaultwarden web vault and Bitwarden clients, and for the Jellyfin web and
+# native clients. The Free plan permits five custom rules, so the Vaultwarden
+# and Jellyfin geo blocks and the Vaultwarden admin-panel block share one rule.
 resource "cloudflare_ruleset" "home_assistant_custom_waf" {
   zone_id     = var.cloudflare_zone_id
   name        = "Home Assistant custom WAF controls"
@@ -54,9 +58,9 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
       enabled     = true
     },
     {
-      ref         = "vaultwarden_geo_allowlist_and_admin"
-      description = "Block Vaultwarden traffic from outside allowed countries and all public admin-panel requests"
-      expression  = "${local.vaultwarden_waf_scope} and (not (ip.src.country in {${join(" ", [for c in local.vaultwarden_allowed_countries : "\"${c}\""])}}) or lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\"))"
+      ref         = "geo_allowlist_and_vaultwarden_admin"
+      description = "Block Vaultwarden and Jellyfin traffic from outside allowed countries and all public Vaultwarden admin-panel requests"
+      expression  = "(${local.geo_allowlist_scope} and not (ip.src.country in {${join(" ", [for c in local.geo_allowed_countries : "\"${c}\""])}})) or (${local.vaultwarden_waf_scope} and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\")))"
       action      = "block"
       enabled     = true
     }
@@ -65,21 +69,22 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
 
 # The Free plan permits one rate-limiting rule, a ten-second counting period,
 # and IP-based counting. Host is not an available Free-plan rate expression
-# field, so this uses Home Assistant's distinctive login-flow path and
-# Vaultwarden's login path. It does not include /auth/token, /api, WebSocket,
-# or Alexa directive traffic.
+# field, so this uses Home Assistant's distinctive login-flow path,
+# Vaultwarden's login path, and Jellyfin's password login path (listed in both
+# casings because Jellyfin routes are case-insensitive). It does not include
+# /auth/token, /api, WebSocket, or Alexa directive traffic.
 resource "cloudflare_ruleset" "home_assistant_rate_limit" {
   zone_id     = var.cloudflare_zone_id
   name        = "Home Assistant authentication rate limit"
-  description = "Free-plan per-IP protection for Home Assistant and Vaultwarden login requests."
+  description = "Free-plan per-IP protection for Home Assistant, Vaultwarden, and Jellyfin login requests."
   kind        = "zone"
   phase       = "http_ratelimit"
 
   rules = [
     {
       ref         = "rate_limit_home_assistant_login_flow"
-      description = "Block an IP after more than 10 Home Assistant or Vaultwarden login requests in 10 seconds"
-      expression  = "(http.request.uri.path eq \"/auth/login_flow\" or starts_with(http.request.uri.path, \"/auth/login_flow/\") or http.request.uri.path eq \"/identity/connect/token\")"
+      description = "Block an IP after more than 10 Home Assistant, Vaultwarden, or Jellyfin login requests in 10 seconds"
+      expression  = "(http.request.uri.path eq \"/auth/login_flow\" or starts_with(http.request.uri.path, \"/auth/login_flow/\") or http.request.uri.path eq \"/identity/connect/token\" or http.request.uri.path in {\"/Users/AuthenticateByName\" \"/users/authenticatebyname\"})"
       action      = "block"
       enabled     = true
       ratelimit = {
@@ -92,7 +97,7 @@ resource "cloudflare_ruleset" "home_assistant_rate_limit" {
   ]
 }
 
-# Home Assistant and Vaultwarden are authenticated and stateful. Explicitly bypassing the edge
+# Home Assistant, Vaultwarden, and Jellyfin are authenticated and stateful. Explicitly bypassing the edge
 # cache prevents a future origin-header change from making any response cache
 # eligible, including API and authentication responses.
 resource "cloudflare_ruleset" "home_assistant_cache" {
@@ -122,12 +127,22 @@ resource "cloudflare_ruleset" "home_assistant_cache" {
       action_parameters = {
         cache = false
       }
+    },
+    {
+      ref         = "bypass_jellyfin_cache"
+      description = "Bypass Cloudflare cache for every Jellyfin response"
+      expression  = local.jellyfin_waf_scope
+      action      = "set_cache_settings"
+      enabled     = true
+      action_parameters = {
+        cache = false
+      }
     }
   ]
 }
 
 # Start HSTS with a reversible 30-day lifetime and deliberately omit
-# includeSubDomains and preload because this module owns only two zone hostnames.
+# includeSubDomains and preload because this module owns only three zone hostnames.
 resource "cloudflare_ruleset" "home_assistant_response_headers" {
   zone_id     = var.cloudflare_zone_id
   name        = "Home Assistant security response headers"
@@ -159,6 +174,25 @@ resource "cloudflare_ruleset" "home_assistant_response_headers" {
       ref         = "vaultwarden_security_headers"
       description = "Set HSTS and disable MIME content sniffing for Vaultwarden"
       expression  = local.vaultwarden_waf_scope
+      action      = "rewrite"
+      enabled     = true
+      action_parameters = {
+        headers = {
+          "strict-transport-security" = {
+            operation = "set"
+            value     = "max-age=2592000"
+          }
+          "x-content-type-options" = {
+            operation = "set"
+            value     = "nosniff"
+          }
+        }
+      }
+    },
+    {
+      ref         = "jellyfin_security_headers"
+      description = "Set HSTS and disable MIME content sniffing for Jellyfin"
+      expression  = local.jellyfin_waf_scope
       action      = "rewrite"
       enabled     = true
       action_parameters = {

@@ -203,11 +203,12 @@ kubectl get secret restic-credentials -n backup -o jsonpath='{.data.password}' |
 | ArgoCD         | `https://argocd.<your-domain>`         |
 | Home Assistant | `https://homeassistant.<your-domain>`  |
 | Forgejo        | `https://git.<your-domain>` (LAN only) |
-| Jellyfin       | `https://jellyfin.<your-domain>`       |
+| Jellyfin       | `https://jellyfin.<your-domain>` (LAN) |
 | Paperless-ngx  | `https://paperless.<your-domain>`      |
 | Vaultwarden    | `https://vault.<your-domain>`          |
 | PostgreSQL     | Internal only (ClusterIP on port 5432) |
 | Redis          | Internal only (ClusterIP on port 6379) |
 
 Home Assistant and Vaultwarden are also reachable from the internet through the
-Cloudflare Tunnel; see [docs/home-assistant-alexa.md](docs/home-assistant-alexa.md).
+Cloudflare Tunnel, and Jellyfin through the separate
+`https://jellyfin-remote.<your-domain>` hostname; see [docs/home-assistant-alexa.md](docs/home-assistant-alexa.md).
