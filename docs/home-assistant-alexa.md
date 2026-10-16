@@ -357,6 +357,16 @@ configures:
   every country except Germany for Vaultwarden and Jellyfin, with no Amazon
   bypass, and blocks Vaultwarden's `/admin` so the admin panel is reachable
   only on the LAN;
+- in the same rule, Jellyfin's admin API on `jellyfin-remote`. The dashboard
+  is a client-side route (`/web/#/dashboard`) that never reaches the edge, so
+  the rule blocks the endpoints it calls instead: plugins, packages,
+  repositories, scheduled tasks, logs, server configuration writes, users and
+  policies, libraries, devices, API keys, backups, the setup wizard, and the
+  file-system browser. The list is derived from the `RequiresElevation`
+  operations in Jellyfin's OpenAPI spec (`/api-docs/openapi.json`) and must be
+  rechecked after major upgrades or new plugins. Item metadata edits and Live TV
+  timers are not covered because the Free plan has no regex matching.
+  Administration works normally on `jellyfin.<your-domain>`;
 - the Free plan's single rate-limit rule: more than 10 requests to Home
   Assistant's `/auth/login_flow` path, Vaultwarden's `/identity/connect/token`
   path, or Jellyfin's `/Users/AuthenticateByName` path from one IP in 10

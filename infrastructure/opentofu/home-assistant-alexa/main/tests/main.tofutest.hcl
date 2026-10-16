@@ -112,8 +112,13 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression == "((http.host in {\"vault.example.invalid\" \"jellyfin-remote.example.invalid\"}) and not (ip.src.country in {\"DE\"})) or ((http.host eq \"vault.example.invalid\") and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\")))"
+    condition     = startswith(cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression, "((http.host in {\"vault.example.invalid\" \"jellyfin-remote.example.invalid\"}) and not (ip.src.country in {\"DE\"})) or ((http.host eq \"vault.example.invalid\") and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\"))) or ((http.host eq \"jellyfin-remote.example.invalid\") and (")
     error_message = "Vaultwarden and Jellyfin must be limited to allowed countries with no Amazon bypass, and the Vaultwarden admin panel must not be public."
+  }
+
+  assert {
+    condition     = alltrue([for clause in ["starts_with(lower(http.request.uri.path), \"/plugins\")", "starts_with(lower(http.request.uri.path), \"/system/logs\")", "starts_with(lower(http.request.uri.path), \"/environment\")", "starts_with(lower(http.request.uri.path), \"/startup/\")", "starts_with(lower(http.request.uri.path), \"/users/new\")", "(starts_with(lower(http.request.uri.path), \"/system/configuration\") and http.request.method ne \"GET\")"] : strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression, clause)]) && !strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression, "\"/users/authenticatebyname\"") && length(cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression) < 4096
+    error_message = "The Jellyfin admin API must be blocked at the edge without blocking login or streaming, within Cloudflare's 4096-character expression limit."
   }
 
   assert {

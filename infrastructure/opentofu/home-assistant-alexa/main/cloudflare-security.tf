@@ -13,6 +13,36 @@ locals {
   home_assistant_amazon_asns = [16509, 14618]
 
   geo_allowed_countries = ["DE"]
+
+  # Jellyfin's dashboard is a client-side route (/web/#/dashboard) that never
+  # reaches the edge, so the admin API it calls is blocked instead. Derived from
+  # the RequiresElevation/FirstTimeSetupOrElevated operations in the 12.2
+  # OpenAPI spec (including installed plugins); recheck after major upgrades.
+  # Not covered: POST /Items/{id} (metadata edit) and Live TV timers, which
+  # cannot be matched by path without regex.
+  lower_path = "lower(http.request.uri.path)"
+  jellyfin_admin_path_prefixes = [
+    "/anidb", "/auth/", "/backup", "/devices", "/environment", "/episode/",
+    "/filetransformation", "/intros/", "/introskipper", "/items/remotesearch/apply",
+    "/items/remotesearch/person", "/library/mediafolders", "/library/physicalpaths",
+    "/library/refresh", "/library/virtualfolders", "/livetv/channelmapping",
+    "/livetv/listingproviders", "/livetv/tuner", "/mediasegmentsapi", "/packages",
+    "/plugins", "/repositories", "/scheduledtasks", "/skipbuttoncss", "/startup/",
+    "/system/activitylog", "/system/configuration/metadataoptions", "/system/info/storage",
+    "/system/logs", "/system/restart", "/system/shutdown", "/users/new",
+    "/videos/mergeversions", "/web/configurationpages",
+  ]
+  jellyfin_admin_item_subpaths = ["/contenttype", "/externalidinfos", "/metadataeditor", "/refresh", "/remoteimages/download"]
+  jellyfin_admin_paths = join(" or ", concat(
+    [for p in local.jellyfin_admin_path_prefixes : "starts_with(${local.lower_path}, \"${p}\")"],
+    [
+      "(starts_with(${local.lower_path}, \"/items/\") and (${join(" or ", [for s in local.jellyfin_admin_item_subpaths : "${local.lower_path} contains \"${s}\""])} or (${local.lower_path} contains \"/images/\" and http.request.method in {\"POST\" \"DELETE\"})))",
+      "(starts_with(${local.lower_path}, \"/system/configuration\") and http.request.method ne \"GET\")",
+      "(starts_with(${local.lower_path}, \"/users/\") and (${local.lower_path} contains \"/policy\" or http.request.method eq \"DELETE\"))",
+      "(starts_with(${local.lower_path}, \"/videos/\") and (${local.lower_path} contains \"/alternatesources\" or (${local.lower_path} contains \"/subtitles/\" and http.request.method eq \"DELETE\")))",
+      "(starts_with(${local.lower_path}, \"/branding/splashscreen\") and http.request.method ne \"GET\")",
+    ],
+  ))
 }
 
 # Cloudflare automatically deploys its Free Managed Ruleset on Free zones. This
@@ -20,7 +50,7 @@ locals {
 # browser, companion-app, WebSocket, OAuth, and Alexa traffic, for the
 # Vaultwarden web vault and Bitwarden clients, and for the Jellyfin web and
 # native clients. The Free plan permits five custom rules, so the Vaultwarden
-# and Jellyfin geo blocks and the Vaultwarden admin-panel block share one rule.
+# and Jellyfin geo blocks and both admin-surface blocks share one rule.
 resource "cloudflare_ruleset" "home_assistant_custom_waf" {
   zone_id     = var.cloudflare_zone_id
   name        = "Home Assistant custom WAF controls"
@@ -58,9 +88,9 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
       enabled     = true
     },
     {
-      ref         = "geo_allowlist_and_vaultwarden_admin"
-      description = "Block Vaultwarden and Jellyfin traffic from outside allowed countries and all public Vaultwarden admin-panel requests"
-      expression  = "(${local.geo_allowlist_scope} and not (ip.src.country in {${join(" ", [for c in local.geo_allowed_countries : "\"${c}\""])}})) or (${local.vaultwarden_waf_scope} and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\")))"
+      ref         = "geo_allowlist_and_admin_surfaces"
+      description = "Block Vaultwarden and Jellyfin traffic from outside allowed countries and all public Vaultwarden admin-panel and Jellyfin admin-API requests"
+      expression  = "(${local.geo_allowlist_scope} and not (ip.src.country in {${join(" ", [for c in local.geo_allowed_countries : "\"${c}\""])}})) or (${local.vaultwarden_waf_scope} and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\"))) or (${local.jellyfin_waf_scope} and (${local.jellyfin_admin_paths}))"
       action      = "block"
       enabled     = true
     }
