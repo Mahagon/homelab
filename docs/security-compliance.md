@@ -45,7 +45,7 @@ Because the deferred controls are material, documentation and CI must say
 | Root filesystem | Partial | Controllers and simple workloads use read-only roots where safe; stateful applications have explicit, reviewed exceptions. |
 | Host namespaces | Implemented with exception | Home Assistant retains `hostNetwork` for local-device discovery; owned workloads do not use host PID or IPC. |
 | Resource governance | Implemented | CPU/memory requests and limits, fixed replica count, and no autoscaler. |
-| Network segmentation | Configured, pending node enablement | Cloudflared namespace default-deny with separate DNS, tunnel 7844, Home Assistant 8123, and Vaultwarden 8080 egress policies; Vaultwarden namespace default-deny ingress admitting only Traefik and cloudflared; K3s must run without `--disable-network-policy true`. |
+| Network segmentation | Configured, pending node enablement | Cloudflared namespace default-deny with separate DNS, tunnel 7844, Home Assistant 8123, Vaultwarden 8080, and Jellyfin 8096 egress policies; Vaultwarden and Jellyfin namespaces default-deny ingress admitting only Traefik and cloudflared; K3s must run without `--disable-network-policy true`. |
 | Secret handling | Partial | Token is a read-only Secret mount and never stored in Git; K3s secrets-at-rest encryption is outside this scope. |
 | Image provenance | Partial | Explicit workload images use readable tags plus immutable digests and Renovate tracking; rendered Helm images are inventoried and scanned, but admission-time signature verification is not enabled. |
 | Availability | Implemented | Two connectors, readiness/liveness probes, rolling update, and PDB. Both replicas share one physical node. |
@@ -59,7 +59,8 @@ namespaces.
 - Home Assistant uses `hostNetwork` and `NET_ADMIN`/`NET_RAW` for local-device
   discovery. It cannot enter a `restricted` namespace without redesigning that
   discovery path.
-- Jellyfin currently runs privileged for its hardware/media requirements.
+- Jellyfin currently runs privileged for its hardware/media requirements and
+  is reachable through the tunnel at `jellyfin-remote.<your-domain>`.
 - Backup jobs retain `DAC_READ_SEARCH` for read-only traversal of service-owned
   volumes and require writable Restic/PostgreSQL client state. The local-path
   provisioner and helper require API or host-volume access.
@@ -78,17 +79,17 @@ appear compliant.
 | Threat | Control |
 |---|---|
 | Internet scanning of the home network | Tunnel is outbound-only; no Home Assistant WAN NAT/port forward. |
-| Bypass of public authentication | Home Assistant authentication/MFA remains mandatory; unauthenticated `/api/` returns 401. Vaultwarden has signups disabled, relies on its own authentication and two-step login, and its `/admin` panel is blocked at the edge. |
+| Bypass of public authentication | Home Assistant authentication/MFA remains mandatory; unauthenticated `/api/` returns 401. Vaultwarden has signups disabled, relies on its own authentication and two-step login, and its `/admin` panel is blocked at the edge. Jellyfin relies on its own password login (no built-in two-factor); only the separate `jellyfin-remote` hostname is published, and it is rate-limited and Germany-only. |
 | Stolen Alexa OAuth token | Lambda neither stores nor logs tokens and forwards them only to the fixed HTTPS Home Assistant endpoint. |
 | Arbitrary Lambda invocation | Resource permission requires the Alexa Smart Home service principal and exact Skill ID. |
 | Lambda cost amplification | Eight-second timeout, 256 MB memory, and the AWS account-level concurrency quota. |
 | Tunnel compromise | Connector token is a sensitive state output and Kubernetes Secret; the pod cannot modify remote routing. Rotate after suspected disclosure. Connector egress is restricted to TCP/UDP 7844. |
 | DNS takeover or drift | Dedicated Cloudflare API token, OpenTofu-managed proxied CNAME, ExternalDNS exclusion, and post-apply empty plan. |
 | Forged DNS responses | Cloudflare signs the zone with DNSSEC; the generated DS record must also be published at the registrar and verified externally. |
-| Web exploit and reconnaissance traffic | Cloudflare's automatically deployed Free Managed Ruleset plus OpenTofu-managed hostname-scoped custom WAF blocks non-HTTPS ports, unsafe methods, and common secret/CMS probes on both tunnel hostnames. Home Assistant is limited to Germany plus Amazon's ASNs; Vaultwarden is limited to Germany. |
-| Authentication request flooding | The Free-plan rate-limit rule blocks an IP for 10 seconds after more than 10 Home Assistant login-flow or Vaultwarden login requests in 10 seconds; OAuth token, API, WebSocket, and Alexa paths are excluded. |
-| Sensitive response caching | Hostname-scoped Cache Rules make every Home Assistant and Vaultwarden response ineligible for Cloudflare edge caching. |
-| TLS downgrade and browser content confusion | The zone requires TLS 1.2 or newer and enables TLS 1.3; Home Assistant and Vaultwarden responses receive a conservative 30-day HSTS policy and `nosniff` without affecting sibling subdomains. |
+| Web exploit and reconnaissance traffic | Cloudflare's automatically deployed Free Managed Ruleset plus OpenTofu-managed hostname-scoped custom WAF blocks non-HTTPS ports, unsafe methods, and common secret/CMS probes on all tunnel hostnames. Home Assistant is limited to Germany plus Amazon's ASNs; Vaultwarden and Jellyfin are limited to Germany. |
+| Authentication request flooding | The Free-plan rate-limit rule blocks an IP for 10 seconds after more than 10 Home Assistant login-flow, Vaultwarden login, or Jellyfin password-login requests in 10 seconds; OAuth token, API, WebSocket, and Alexa paths are excluded. |
+| Sensitive response caching | Hostname-scoped Cache Rules make every Home Assistant, Vaultwarden, and Jellyfin response ineligible for Cloudflare edge caching. |
+| TLS downgrade and browser content confusion | The zone requires TLS 1.2 or newer and enables TLS 1.3; Home Assistant, Vaultwarden, and Jellyfin responses receive a conservative 30-day HSTS policy and `nosniff` without affecting sibling subdomains. |
 | Unauthorized certificate issuance | Cloudflare Certificate Transparency Monitoring is an explicit one-time dashboard control because provider v5.24 has no suitable managed resource. |
 | CI credential theft | Short-lived GitHub OIDC credentials, exact trust subject, read-only default workflow permissions, and pinned actions. |
 | Accidental broad Alexa exposure | Explicit 14-entity allowlist; no domain/glob includes and no proactive-event credentials. |
@@ -98,7 +99,13 @@ because it would intercept Alexa account linking and directives. Home Assistant
 MFA protects interactive remote users instead. It is also absent from the
 Vaultwarden hostname because the Bitwarden mobile and desktop clients cannot
 complete an Access login; vault data is end-to-end encrypted and two-step login
-protects accounts instead.
+protects accounts instead. Jellyfin's native and TV clients cannot complete an
+Access login either.
+
+The publicly reachable Jellyfin container is the privileged GPU workload listed
+below. A Jellyfin remote-code-execution flaw would therefore reach the node, so
+the route is Germany-only and rate-limited, the namespace admits only Traefik
+and cloudflared, and Jellyfin image updates should be merged promptly.
 
 ## Automated evidence
 

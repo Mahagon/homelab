@@ -17,6 +17,7 @@ flowchart TD
     K3s --> AppServices["Application services"]
     AppServices --> HomeAssistant["Home Assistant"]
     AppServices --> Vaultwarden["Vaultwarden"]
+    AppServices --> Jellyfin["Jellyfin"]
 
     Traefik --> AppServices
     ArgoCD -->|reconciles| AppServices
@@ -24,6 +25,7 @@ flowchart TD
     VPA -->|adjusts resources| AppServices
     Cloudflared -->|internal HTTP 8123| HomeAssistant
     Cloudflared -->|internal HTTP 8080| Vaultwarden
+    Cloudflared -->|internal HTTP 8096| Jellyfin
 
     SSD["SSD 256 GB - OS, K3s state, fast PVs"]
     HDD["HDD 4 TB - media, documents"]

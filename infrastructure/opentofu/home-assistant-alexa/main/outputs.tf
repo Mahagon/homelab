@@ -26,6 +26,12 @@ output "vaultwarden_hostname" {
   sensitive   = true
 }
 
+output "jellyfin_hostname" {
+  description = "Jellyfin remote-access hostname published through the tunnel."
+  value       = local.jellyfin_hostname
+  sensitive   = true
+}
+
 output "alexa_permission_configured" {
   description = "Whether the Lambda invocation permission is restricted to an Alexa Skill ID."
   value       = var.alexa_skill_id != ""
