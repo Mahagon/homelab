@@ -31,25 +31,36 @@ spec:
         - protocol: TCP
           port: 8096
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-cloudflared-ingress
-  namespace: jellyfin
-spec:
-  podSelector:
-    matchLabels:
-      app: jellyfin
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: cloudflared
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: cloudflared
-      ports:
-        - protocol: TCP
-          port: 8096
+# TEMPORARILY DISABLED: public access to Jellyfin (jellyfin-remote.<domain>).
+# Without this policy, default-deny-ingress drops traffic from the Cloudflare
+# tunnel, so remote clients get a Cloudflare error. LAN access via Traefik
+# (jellyfin.<domain>) is unaffected. The tunnel route, DNS record, and WAF
+# rules in OpenTofu stay in place.
+#
+# Don't `kubectl delete` this policy instead: ArgoCD selfHeal restores it.
+# After sync, drop already-open tunnel connections with:
+#   kubectl -n cloudflared rollout restart deploy/cloudflared
+#
+# To re-enable: uncomment the policy below (or revert this commit).
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: allow-cloudflared-ingress
+#   namespace: jellyfin
+# spec:
+#   podSelector:
+#     matchLabels:
+#       app: jellyfin
+#   policyTypes:
+#     - Ingress
+#   ingress:
+#     - from:
+#         - namespaceSelector:
+#             matchLabels:
+#               kubernetes.io/metadata.name: cloudflared
+#           podSelector:
+#             matchLabels:
+#               app.kubernetes.io/name: cloudflared
+#       ports:
+#         - protocol: TCP
+#           port: 8096
