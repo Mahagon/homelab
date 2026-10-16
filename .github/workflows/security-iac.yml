@@ -204,6 +204,9 @@ jobs:
 
       - name: Run TFLint
         shell: bash
+        env:
+          # Authenticated plugin download; the anonymous API limit is shared per runner IP.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl"
