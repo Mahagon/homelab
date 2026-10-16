@@ -85,6 +85,9 @@ spec:
         - protocol: TCP
           port: 8080
 ---
+# Jellyfin public access is TEMPORARILY DISABLED on the receiving side: see
+# allow-cloudflared-ingress in k8s/apps/jellyfin/manifests/networkpolicy.yaml.
+# This egress policy stays so re-enabling only needs the Jellyfin side.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
