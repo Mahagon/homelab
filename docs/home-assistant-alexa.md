@@ -476,7 +476,14 @@ Jellyfin needs no override: `jellyfin.<your-domain>` already resolves to the
 node, and only `jellyfin-remote.<your-domain>` uses the tunnel. In the Jellyfin
 dashboard under **Networking**, set **Known proxies** to `10.42.0.0/16` so the
 client address is taken from `X-Forwarded-For`, and **LAN networks** to
-`192.168.178.0/24`. Confirm under **Dashboard > Activity** that a phone on
+`192.168.178.0/24`, and enable **Allow remote connections to this server**.
+Remote access is required: kubelet probes arrive from the pod-network gateway
+`10.42.0.1` without a forwarded header, so Jellyfin classifies them as remote.
+With remote access disabled it rejects them (`RejectDueToRemoteAccessDisabled`
+in the log), the pod never becomes Ready, and both hostnames fail. If the web
+UI is unreachable, use `kubectl port-forward -n jellyfin deploy/jellyfin
+8096:8096`; loopback requests count as local. Confirm under
+**Dashboard > Activity** that a phone on
 mobile data shows a public address and is treated as remote. Every Jellyfin
 account must have a strong password because Jellyfin has no built-in two-factor
 login.

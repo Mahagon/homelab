@@ -86,12 +86,15 @@ spec:
               path: /health
               port: http
             periodSeconds: 10
+            # /health can exceed the 1s default on this CPU under load.
+            timeoutSeconds: 5
             failureThreshold: 180
           livenessProbe:
             httpGet:
               path: /health
               port: http
             periodSeconds: 30
+            timeoutSeconds: 5
       volumes:
         - name: config
           persistentVolumeClaim:
