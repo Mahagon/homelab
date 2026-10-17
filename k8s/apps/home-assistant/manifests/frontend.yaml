@@ -83,6 +83,12 @@ data:
             show_name: false
             show_state: true
             show_icon: true
+            visibility:
+              - condition: state
+                entity: person.mahagon
+                state_not:
+                  - unknown
+                  - unavailable
           - type: entity
             entity: sensor.total_dc_power
             name: Solar
@@ -244,21 +250,15 @@ data:
                 grid_options:
                   columns: 12
               - type: tile
-                entity: input_button.fernsehen
+                entity: script.shutter_tv_state
                 name: Fernsehen
                 icon: mdi:television-classic
                 color: deep-purple
                 hide_state: true
                 tap_action:
-                  action: perform-action
-                  perform_action: input_button.press
-                  target:
-                    entity_id: input_button.fernsehen
+                  action: toggle
                 icon_tap_action:
-                  action: perform-action
-                  perform_action: input_button.press
-                  target:
-                    entity_id: input_button.fernsehen
+                  action: toggle
                 grid_options:
                   columns: 12
               - type: heading
@@ -1336,6 +1336,12 @@ data:
                 name: Daniel
                 grid_options:
                   columns: 12
+                visibility:
+                  - condition: state
+                    entity: person.mahagon
+                    state_not:
+                      - unknown
+                      - unavailable
               - type: tile
                 entity: sensor.pixel_9a_battery_level
                 name: Pixel 9a
