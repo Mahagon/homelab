@@ -527,7 +527,7 @@ In Home Assistant:
 3. Enable MFA for administrative and remote-access users.
 4. Confirm the four lights, nine shutters, and helper show the German names.
 
-The YAML allowlist exposes exactly 14 entities. Do not add domain or glob
+The YAML allowlist exposes exactly 18 entities. Do not add domain or glob
 includes; they would make newly created entities visible to Alexa implicitly.
 
 ## 10. Create and link the Alexa skill
@@ -579,8 +579,13 @@ discovery.
 Expected examples:
 
 - “Alexa, Wohnzimmer Licht einschalten.”
-- “Alexa, Alle Rollläden öffnen.”
-- “Alexa, Alle Rollläden schließen.”
+- “Alexa, Rollläden öffnen.”
+- “Alexa, Rollläden schließen.”
+- “Alexa, aktiviere Fernsehen.” (scene from `script.shutter_tv_state`)
+
+After renaming an entity in `entity_config`, run device discovery again
+(“Alexa, finde meine Geräte”); Alexa keeps the old name until then. If it still
+shows the old name, delete the device in the Alexa app and discover again.
 
 ## Rotation, troubleshooting, and rollback
 

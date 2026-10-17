@@ -195,6 +195,7 @@ data:
             - cover.rolladen_8
             - cover.rolladen_9
             - cover.shutters
+            - script.shutter_tv_state
         entity_config:
           switch.computer:
             name: Computer
@@ -247,6 +248,10 @@ data:
           cover.shutters:
             name: Rollläden
             display_categories: INTERIOR_BLIND
+          # Scripts are Alexa scenes: "Alexa, aktiviere Fernsehen".
+          script.shutter_tv_state:
+            name: Fernsehen
+            display_categories: ACTIVITY_TRIGGER
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
