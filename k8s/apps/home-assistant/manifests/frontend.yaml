@@ -500,7 +500,7 @@ data:
                 color: cyan
               - type: tile
                 entity: sensor.geschirrspuler_tur
-                name: Tür
+                name: Geschirrspüler Tür
                 icon: mdi:door
               - type: tile
                 entity: sensor.geschirrspuler_programm_fortschritt
@@ -538,7 +538,7 @@ data:
                 color: deep-orange
               - type: tile
                 entity: switch.kochfeld_kindersicherung
-                name: Kindersicherung
+                name: Kochfeld Kindersicherung
                 icon: mdi:lock
                 color: red
               - type: tile
