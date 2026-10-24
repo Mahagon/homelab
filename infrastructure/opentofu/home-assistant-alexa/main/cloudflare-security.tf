@@ -15,6 +15,18 @@ locals {
 
   geo_allowed_countries = ["DE"]
 
+  # Secret-file, source-control, and CMS probes seen in the zone's security
+  # events. None of the tunnel services serve dotfiles, PHP, WordPress, or Spring
+  # Actuator paths. The suffixes catch nested variants (/backend/.env,
+  # /old/phpinfo.php) that Germany-hosted scanners get past the geo rules with.
+  recon_path_prefixes = ["/.git", "/.svn", "/.hg", "/.env", "/.aws", "/.docker", "/.kube", "/actuator", "/wp-", "/phpmyadmin"]
+  recon_path_suffixes = ["/.env", ".php"]
+  recon_paths = join(" or ", concat(
+    [for p in local.recon_path_prefixes : "starts_with(${local.lower_path}, \"${p}\")"],
+    [for s in local.recon_path_suffixes : "ends_with(${local.lower_path}, \"${s}\")"],
+    ["${local.lower_path} eq \"/.ds_store\""],
+  ))
+
   # Jellyfin's dashboard is a client-side route (/web/#/dashboard) that never
   # reaches the edge, so the admin API it calls is blocked instead. Derived from
   # the RequiresElevation/FirstTimeSetupOrElevated operations in the 12.2
@@ -101,7 +113,7 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
     {
       ref         = "home_assistant_reconnaissance_paths"
       description = "Block common source-control, secret-file, and unrelated CMS probes"
-      expression  = "${local.tunnel_waf_scope} and (starts_with(lower(http.request.uri.path), \"/.git\") or starts_with(lower(http.request.uri.path), \"/.svn\") or starts_with(lower(http.request.uri.path), \"/.hg\") or lower(http.request.uri.path) in {\"/.env\" \"/.ds_store\" \"/xmlrpc.php\" \"/wp-login.php\"} or starts_with(lower(http.request.uri.path), \"/wp-admin\") or starts_with(lower(http.request.uri.path), \"/phpmyadmin\"))"
+      expression  = "${local.tunnel_waf_scope} and (${local.recon_paths})"
       action      = "block"
       enabled     = true
     },
