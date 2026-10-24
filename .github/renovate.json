@@ -10,6 +10,7 @@
     ":gitSignOff"
   ],
   "prCreation": "immediate",
+  "osvVulnerabilityAlerts": true,
   "automerge": false,
   "automergeType": "pr",
   "platformAutomerge": false,
