@@ -125,23 +125,23 @@ to `main`. Add required reviewers if the repository plan supports them.
 
 Add these environment variables:
 
-| Name | Value |
-|---|---|
-| `AWS_DEPLOY_ROLE_ARN` | Bootstrap output `github_deployment_role_arn` |
-| `TOFU_STATE_BUCKET` | Bootstrap output `state_bucket_name` |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `CLOUDFLARE_ZONE_ID` | Zone ID for `<your-domain>` |
-| `ALEXA_SKILL_ID` | Empty until the ASK deployment creates the skill |
-| `PUBLISH_DNS` | `true` after the tunnel connectors are healthy |
+| Name                    | Value                                            |
+| ----------------------- | ------------------------------------------------ |
+| `AWS_DEPLOY_ROLE_ARN`   | Bootstrap output `github_deployment_role_arn`    |
+| `TOFU_STATE_BUCKET`     | Bootstrap output `state_bucket_name`             |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                            |
+| `CLOUDFLARE_ZONE_ID`    | Zone ID for `<your-domain>`                      |
+| `ALEXA_SKILL_ID`        | Empty until the ASK deployment creates the skill |
+| `PUBLISH_DNS`           | `true` after the tunnel connectors are healthy   |
 
 Add these environment secrets. Enter them interactively so their values do not
 appear in shell history:
 
-| Secret | Purpose |
-|---|---|
+| Secret                  | Purpose                                                         |
+| ----------------------- | --------------------------------------------------------------- |
 | `HOME_ASSISTANT_DOMAIN` | Root domain only, without `homeassistant.`, a scheme, or a path |
-| `CLOUDFLARE_API_TOKEN` | Dedicated token used only by this OpenTofu stack |
-| `AWS_BUDGET_EMAIL` | Address for budget notifications |
+| `CLOUDFLARE_API_TOKEN`  | Dedicated token used only by this OpenTofu stack                |
+| `AWS_BUDGET_EMAIL`      | Address for budget notifications                                |
 
 Create a dedicated Cloudflare token; do not reuse the cert-manager or
 ExternalDNS token. Restrict
@@ -342,17 +342,24 @@ not contain the home WAN address.
 
 ### Cloudflare edge hardening
 
-Cloudflare automatically deploys the Free Managed Ruleset on Free-plan zones.
-The `main` OpenTofu root additionally owns the zone entry-point rulesets for the
-custom-firewall, rate-limit, cache-settings, and response-header phases. It
-configures:
+Cloudflare deploys the Free Managed Ruleset on Free-plan zones by default. The
+`main` OpenTofu root owns the managed-firewall entry point that executes it, so
+disabling it in the dashboard shows up as plan drift; Cloudflare still updates
+the rules inside the ruleset. If the first apply fails because the entry point
+already exists, import it with
+`tofu import cloudflare_ruleset.cloudflare_managed_waf 'zones/<zone-id>/<ruleset-id>'`
+(the ID is listed by `GET /zones/<zone-id>/rulesets/phases/http_request_firewall_managed/entrypoint`).
+The root also owns the zone entry-point rulesets for the custom-firewall,
+rate-limit, cache-settings, and response-header phases. It configures:
 
 - hostname-scoped blocking of non-HTTPS edge ports;
 - blocking of `CONNECT`, `TRACE`, and `TRACK`, which Home Assistant does not
   require;
 - blocking of common source-control, secret-file, WordPress, and phpMyAdmin
   reconnaissance paths;
-- a Home Assistant geo allowlist (Germany, plus Amazon's ASNs for Alexa);
+- a Home Assistant geo allowlist (Germany, plus Amazon's ASNs only on
+  `/api/alexa/smart_home` and `/auth/token`, because anyone can rent an AWS
+  instance in any country);
 - one shared rule (the Free plan permits only five custom rules) that blocks
   every country except Germany for Vaultwarden and Jellyfin, with no Amazon
   bypass, and blocks Vaultwarden's `/admin` so the admin panel is reachable
@@ -556,17 +563,17 @@ infrastructure/opentofu/home-assistant-alexa/ask/provision-skill.sh \
 ASK account linking is interactive because the CLI intentionally does not save
 the client secret. Enter:
 
-| Prompt | Value |
-|---|---|
-| Grant type | Authorization Code |
-| Authorization URL | `https://homeassistant.<your-domain>/auth/authorize` |
-| Access-token URL | `https://homeassistant.<your-domain>/auth/token` |
-| Client ID | `https://layla.amazon.com/` including trailing slash |
-| Client secret | A generated nonempty value; Home Assistant does not inspect it |
-| Authentication scheme | Request body credentials |
-| Scope | `smart_home` |
-| Link from own app/site | Disabled |
-| Allow enablement without linking | No |
+| Prompt                           | Value                                                          |
+| -------------------------------- | -------------------------------------------------------------- |
+| Grant type                       | Authorization Code                                             |
+| Authorization URL                | `https://homeassistant.<your-domain>/auth/authorize`           |
+| Access-token URL                 | `https://homeassistant.<your-domain>/auth/token`               |
+| Client ID                        | `https://layla.amazon.com/` including trailing slash           |
+| Client secret                    | A generated nonempty value; Home Assistant does not inspect it |
+| Authentication scheme            | Request body credentials                                       |
+| Scope                            | `smart_home`                                                   |
+| Link from own app/site           | Disabled                                                       |
+| Allow enablement without linking | No                                                             |
 
 Set GitHub variable `ALEXA_SKILL_ID` to the returned ID and re-run the OpenTofu
 apply. Confirm the plan adds exactly one `aws_lambda_permission` whose

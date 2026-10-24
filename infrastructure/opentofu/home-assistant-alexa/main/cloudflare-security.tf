@@ -8,9 +8,10 @@ locals {
 
   home_assistant_allowed_countries = ["DE"]
   # Alexa directives come from the eu-west-1 Lambda (IE) and account linking
-  # from Amazon's token service, so Amazon ASNs bypass the geo block.
-  # ponytail: whole AWS ASNs, narrow to /api/alexa + /auth/token if abused
-  home_assistant_amazon_asns = [16509, 14618]
+  # from Amazon's token service, so Amazon ASNs bypass the geo block, but only
+  # on those two endpoints: anyone can rent an AWS instance in any country.
+  home_assistant_amazon_asns  = [16509, 14618]
+  home_assistant_amazon_paths = ["/api/alexa/smart_home", "/auth/token"]
 
   geo_allowed_countries = ["DE"]
 
@@ -45,8 +46,32 @@ locals {
   ))
 }
 
-# Cloudflare automatically deploys its Free Managed Ruleset on Free zones. This
-# entry-point ruleset adds custom controls that are safe for Home Assistant's
+# Cloudflare deploys its Free Managed Ruleset on Free zones by default; owning
+# the managed-phase entry point keeps that deployment under drift detection so
+# it cannot be disabled in the dashboard unnoticed. Cloudflare updates the
+# ruleset's rules (for example the php2shell CVE-2026-109618 rules) itself.
+resource "cloudflare_ruleset" "cloudflare_managed_waf" {
+  zone_id     = var.cloudflare_zone_id
+  name        = "Cloudflare managed WAF"
+  description = "Deploy the Cloudflare Free Managed Ruleset on every zone request."
+  kind        = "zone"
+  phase       = "http_request_firewall_managed"
+
+  rules = [
+    {
+      ref         = "execute_cloudflare_free_managed_ruleset"
+      description = "Execute the Cloudflare Free Managed Ruleset"
+      expression  = "true"
+      action      = "execute"
+      enabled     = true
+      action_parameters = {
+        id = "77454fe2d30c4220b5701f6fdfb893ba"
+      }
+    }
+  ]
+}
+
+# This entry-point ruleset adds custom controls that are safe for Home Assistant's
 # browser, companion-app, WebSocket, OAuth, and Alexa traffic, for the
 # Vaultwarden web vault and Bitwarden clients, and for the Jellyfin web and
 # native clients. The Free plan permits five custom rules, so the Vaultwarden
@@ -82,8 +107,8 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
     },
     {
       ref         = "home_assistant_geo_allowlist"
-      description = "Block Home Assistant traffic from outside allowed countries, except Amazon (Alexa)"
-      expression  = "${local.home_assistant_waf_scope} and not (ip.src.country in {${join(" ", [for c in local.home_assistant_allowed_countries : "\"${c}\""])}}) and not (ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}})"
+      description = "Block Home Assistant traffic from outside allowed countries, except Amazon (Alexa) on the Alexa endpoints"
+      expression  = "${local.home_assistant_waf_scope} and not (ip.src.country in {${join(" ", [for c in local.home_assistant_allowed_countries : "\"${c}\""])}}) and not (ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}} and http.request.uri.path in {${join(" ", [for p in local.home_assistant_amazon_paths : "\"${p}\""])}})"
       action      = "block"
       enabled     = true
     },
