@@ -8,9 +8,10 @@ locals {
 
   home_assistant_allowed_countries = ["DE"]
   # Alexa directives come from the eu-west-1 Lambda (IE) and account linking
-  # from Amazon's token service, so Amazon ASNs bypass the geo block.
-  # ponytail: whole AWS ASNs, narrow to /api/alexa + /auth/token if abused
-  home_assistant_amazon_asns = [16509, 14618]
+  # from Amazon's token service, so Amazon ASNs bypass the geo block, but only
+  # on those two endpoints: anyone can rent an AWS instance in any country.
+  home_assistant_amazon_asns  = [16509, 14618]
+  home_assistant_amazon_paths = ["/api/alexa/smart_home", "/auth/token"]
 
   geo_allowed_countries = ["DE"]
 
@@ -106,8 +107,8 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
     },
     {
       ref         = "home_assistant_geo_allowlist"
-      description = "Block Home Assistant traffic from outside allowed countries, except Amazon (Alexa)"
-      expression  = "${local.home_assistant_waf_scope} and not (ip.src.country in {${join(" ", [for c in local.home_assistant_allowed_countries : "\"${c}\""])}}) and not (ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}})"
+      description = "Block Home Assistant traffic from outside allowed countries, except Amazon (Alexa) on the Alexa endpoints"
+      expression  = "${local.home_assistant_waf_scope} and not (ip.src.country in {${join(" ", [for c in local.home_assistant_allowed_countries : "\"${c}\""])}}) and not (ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}} and http.request.uri.path in {${join(" ", [for p in local.home_assistant_amazon_paths : "\"${p}\""])}})"
       action      = "block"
       enabled     = true
     },
