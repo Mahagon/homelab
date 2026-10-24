@@ -112,6 +112,11 @@ run "secure_stack_without_skill" {
   }
 
   assert {
+    condition     = alltrue([for clause in ["starts_with(lower(http.request.uri.path), \"/.git\")", "starts_with(lower(http.request.uri.path), \"/.env\")", "starts_with(lower(http.request.uri.path), \"/.docker\")", "starts_with(lower(http.request.uri.path), \"/actuator\")", "starts_with(lower(http.request.uri.path), \"/wp-\")", "ends_with(lower(http.request.uri.path), \"/.env\")", "ends_with(lower(http.request.uri.path), \".php\")"] : strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[2].expression, clause)]) && !strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[2].expression, "/api") && !strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[2].expression, "/.well-known")
+    error_message = "The reconnaissance rule must block secret-file, PHP, WordPress, and Actuator probes, including nested variants, without touching API or well-known paths."
+  }
+
+  assert {
     condition     = cloudflare_ruleset.home_assistant_custom_waf.rules[3].expression == "(http.host eq \"homeassistant.example.invalid\") and not (ip.src.country in {\"DE\"}) and not (ip.src.asnum in {16509 14618} and http.request.uri.path in {\"/api/alexa/smart_home\" \"/auth/token\"})"
     error_message = "The Home Assistant geo allowlist must stay scoped to the Home Assistant hostname."
   }

@@ -355,8 +355,9 @@ rate-limit, cache-settings, and response-header phases. It configures:
 - hostname-scoped blocking of non-HTTPS edge ports;
 - blocking of `CONNECT`, `TRACE`, and `TRACK`, which Home Assistant does not
   require;
-- blocking of common source-control, secret-file, WordPress, and phpMyAdmin
-  reconnaissance paths;
+- blocking of common source-control, secret-file (`.env`, `.aws`, `.docker`,
+  `.kube`, including nested `/<dir>/.env`), PHP, WordPress, phpMyAdmin, and
+  Spring Actuator reconnaissance paths;
 - a Home Assistant geo allowlist (Germany, plus Amazon's ASNs only on
   `/api/alexa/smart_home` and `/auth/token`, because anyone can rent an AWS
   instance in any country);
