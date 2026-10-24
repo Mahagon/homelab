@@ -15,7 +15,7 @@
   "automergeType": "pr",
   "platformAutomerge": false,
   "ignoreTests": false,
-  "rebaseWhen": "behind-base-branch",
+  "rebaseWhen": "conflicted",
   "argocd": {
     "managerFilePatterns": [
       "/k8s/apps/.+/application\\.yaml$/"
