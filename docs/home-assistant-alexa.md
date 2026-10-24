@@ -342,10 +342,15 @@ not contain the home WAN address.
 
 ### Cloudflare edge hardening
 
-Cloudflare automatically deploys the Free Managed Ruleset on Free-plan zones.
-The `main` OpenTofu root additionally owns the zone entry-point rulesets for the
-custom-firewall, rate-limit, cache-settings, and response-header phases. It
-configures:
+Cloudflare deploys the Free Managed Ruleset on Free-plan zones by default. The
+`main` OpenTofu root owns the managed-firewall entry point that executes it, so
+disabling it in the dashboard shows up as plan drift; Cloudflare still updates
+the rules inside the ruleset. If the first apply fails because the entry point
+already exists, import it with
+`tofu import cloudflare_ruleset.cloudflare_managed_waf 'zones/<zone-id>/<ruleset-id>'`
+(the ID is listed by `GET /zones/<zone-id>/rulesets/phases/http_request_firewall_managed/entrypoint`).
+The root also owns the zone entry-point rulesets for the custom-firewall,
+rate-limit, cache-settings, and response-header phases. It configures:
 
 - hostname-scoped blocking of non-HTTPS edge ports;
 - blocking of `CONNECT`, `TRACE`, and `TRACK`, which Home Assistant does not

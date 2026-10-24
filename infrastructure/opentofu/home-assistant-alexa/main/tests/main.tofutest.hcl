@@ -97,6 +97,11 @@ run "secure_stack_without_skill" {
   }
 
   assert {
+    condition     = cloudflare_ruleset.cloudflare_managed_waf.kind == "zone" && cloudflare_ruleset.cloudflare_managed_waf.phase == "http_request_firewall_managed" && length(cloudflare_ruleset.cloudflare_managed_waf.rules) == 1 && cloudflare_ruleset.cloudflare_managed_waf.rules[0].action == "execute" && cloudflare_ruleset.cloudflare_managed_waf.rules[0].enabled && cloudflare_ruleset.cloudflare_managed_waf.rules[0].expression == "true" && cloudflare_ruleset.cloudflare_managed_waf.rules[0].action_parameters.id == "77454fe2d30c4220b5701f6fdfb893ba"
+    error_message = "The Cloudflare Free Managed Ruleset must be executed on every zone request."
+  }
+
+  assert {
     condition     = cloudflare_ruleset.home_assistant_custom_waf.kind == "zone" && cloudflare_ruleset.home_assistant_custom_waf.phase == "http_request_firewall_custom"
     error_message = "Custom WAF controls must use the zone custom-firewall phase."
   }
