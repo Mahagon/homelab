@@ -151,12 +151,16 @@ spec:
             httpGet:
               path: /
               port: 8000
+            # OCR can saturate the node; tolerate slow responses (~3 min) before restarting.
             periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /
               port: 8000
             periodSeconds: 10
+            timeoutSeconds: 5
       volumes:
         - name: data
           persistentVolumeClaim:
