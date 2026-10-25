@@ -14,8 +14,12 @@ locals {
   home_assistant_amazon_paths = ["/api/alexa/smart_home", "/auth/token"]
   amazon_alexa_traffic        = "(ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}} and http.request.uri.path in {${join(" ", [for p in local.home_assistant_amazon_paths : "\"${p}\""])}})"
 
-  # Rule expressions reference lists as $<name>.
-  ip_bans_list = format("$%s", cloudflare_list.ip_bans.name)
+  # Rule expressions reference lists as $<name>. Cloudflare validates expressions
+  # against the live account during plan, which fails while the list does not
+  # exist yet. The empty suffix from the list's computed ID keeps the expression
+  # unknown until the list is created, so that check is skipped on the plan that
+  # creates it and runs on every later plan.
+  ip_bans_list = format("$%s%s", cloudflare_list.ip_bans.name, substr(cloudflare_list.ip_bans.id, 0, 0))
 
   geo_allowed_countries = ["DE"]
 
