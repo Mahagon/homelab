@@ -112,6 +112,16 @@ run "secure_stack_without_skill" {
   }
 
   assert {
+    condition     = cloudflare_ruleset.home_assistant_custom_waf.rules[1].expression == "(http.host in {\"homeassistant.example.invalid\" \"vault.example.invalid\" \"jellyfin-remote.example.invalid\"}) and ((http.request.method in {\"CONNECT\" \"TRACE\" \"TRACK\"}) or (ip.src in $homelab_ip_bans and not (ip.src.asnum in {16509 14618} and http.request.uri.path in {\"/api/alexa/smart_home\" \"/auth/token\"})))"
+    error_message = "The unsafe-method rule must also block the ban list on every tunnel hostname, except Amazon's Alexa traffic."
+  }
+
+  assert {
+    condition     = cloudflare_list.ip_bans.kind == "ip" && cloudflare_list.ip_bans.name == "homelab_ip_bans" && cloudflare_list.ip_bans.items == null
+    error_message = "The ban list must be an IP list whose items stay out of OpenTofu state and plans."
+  }
+
+  assert {
     condition     = alltrue([for clause in ["starts_with(lower(http.request.uri.path), \"/.git\")", "starts_with(lower(http.request.uri.path), \"/.env\")", "starts_with(lower(http.request.uri.path), \"/.docker\")", "starts_with(lower(http.request.uri.path), \"/actuator\")", "starts_with(lower(http.request.uri.path), \"/wp-\")", "ends_with(lower(http.request.uri.path), \"/.env\")", "ends_with(lower(http.request.uri.path), \".php\")"] : strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[2].expression, clause)]) && !strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[2].expression, "/api") && !strcontains(cloudflare_ruleset.home_assistant_custom_waf.rules[2].expression, "/.well-known")
     error_message = "The reconnaissance rule must block secret-file, PHP, WordPress, and Actuator probes, including nested variants, without touching API or well-known paths."
   }

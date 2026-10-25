@@ -14,6 +14,17 @@ output "cloudflared_tunnel_token" {
   sensitive   = true
 }
 
+output "ip_bans_sync" {
+  description = "Account, zone, and list IDs consumed by scripts/set-ip-bans-secret.sh."
+  value = {
+    account_id = var.cloudflare_account_id
+    zone_id    = var.cloudflare_zone_id
+    list_id    = cloudflare_list.ip_bans.id
+  }
+  # Keeps the IDs out of the CI apply log.
+  sensitive = true
+}
+
 output "public_hostname" {
   description = "Home Assistant hostname used for Alexa and remote access."
   value       = local.home_assistant_hostname

@@ -354,7 +354,10 @@ rate-limit, cache-settings, and response-header phases. It configures:
 
 - hostname-scoped blocking of non-HTTPS edge ports;
 - blocking of `CONNECT`, `TRACE`, and `TRACK`, which Home Assistant does not
-  require;
+  require. The same rule blocks the `homelab_ip_bans` list, except Amazon's
+  Alexa traffic. The `ip-bans` CronJobs fill it with 24-hour bans for
+  reconnaissance probes and recent German AbuseIPDB entries; see
+  [`k8s/apps/ip-bans/README.md`](../k8s/apps/ip-bans/README.md);
 - blocking of common source-control, secret-file (`.env`, `.aws`, `.docker`,
   `.kube`, including nested `/<dir>/.env`), PHP, WordPress, phpMyAdmin, and
   Spring Actuator reconnaissance paths;
@@ -420,6 +423,11 @@ curl --include https://homeassistant.<your-domain>/api/
 
 The first three requests must be blocked by Cloudflare. The unauthenticated API
 request must still reach Home Assistant and return `401 Unauthorized`.
+
+The `.git/config` probe matches the reconnaissance rule, so the `ip-bans` job
+bans the sending address for 24 hours. Your home IPv4 is exempt automatically,
+but only addresses in `IP_BAN_ALLOWLIST` are exempt over IPv6. Run the probe
+from home over IPv4 (`curl -4`), or delete the ban from the list afterwards.
 
 Check the successful API response headers as well:
 
