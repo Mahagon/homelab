@@ -12,6 +12,10 @@ locals {
   # on those two endpoints: anyone can rent an AWS instance in any country.
   home_assistant_amazon_asns  = [16509, 14618]
   home_assistant_amazon_paths = ["/api/alexa/smart_home", "/auth/token"]
+  amazon_alexa_traffic        = "(ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}} and http.request.uri.path in {${join(" ", [for p in local.home_assistant_amazon_paths : "\"${p}\""])}})"
+
+  # Rule expressions reference lists as $<name>.
+  ip_bans_list = format("$%s", cloudflare_list.ip_bans.name)
 
   geo_allowed_countries = ["DE"]
 
@@ -104,9 +108,11 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
       enabled     = true
     },
     {
+      # The ban list shares this rule because all five Free-plan slots are used.
+      # Amazon's Alexa traffic is exempt: shared AWS addresses are reported often.
       ref         = "home_assistant_unsafe_methods"
-      description = "Block HTTP methods that the tunnel services never require"
-      expression  = "${local.tunnel_waf_scope} and (http.request.method in {\"CONNECT\" \"TRACE\" \"TRACK\"})"
+      description = "Block HTTP methods that the tunnel services never require, and temporarily banned IPs"
+      expression  = "${local.tunnel_waf_scope} and ((http.request.method in {\"CONNECT\" \"TRACE\" \"TRACK\"}) or (ip.src in ${local.ip_bans_list} and not ${local.amazon_alexa_traffic}))"
       action      = "block"
       enabled     = true
     },
@@ -120,7 +126,7 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
     {
       ref         = "home_assistant_geo_allowlist"
       description = "Block Home Assistant traffic from outside allowed countries, except Amazon (Alexa) on the Alexa endpoints"
-      expression  = "${local.home_assistant_waf_scope} and not (ip.src.country in {${join(" ", [for c in local.home_assistant_allowed_countries : "\"${c}\""])}}) and not (ip.src.asnum in {${join(" ", local.home_assistant_amazon_asns)}} and http.request.uri.path in {${join(" ", [for p in local.home_assistant_amazon_paths : "\"${p}\""])}})"
+      expression  = "${local.home_assistant_waf_scope} and not (ip.src.country in {${join(" ", [for c in local.home_assistant_allowed_countries : "\"${c}\""])}}) and not ${local.amazon_alexa_traffic}"
       action      = "block"
       enabled     = true
     },
@@ -132,6 +138,17 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
       enabled     = true
     }
   ]
+}
+
+# Temporary bans for reconnaissance probes and recent German AbuseIPDB entries,
+# written only by the ip-bans CronJobs (k8s/apps/ip-bans). Leaving `items` unset
+# keeps the addresses out of state and plans: the provider then never reads
+# them. Never add items here or `tofu import` this list, which reads them all.
+resource "cloudflare_list" "ip_bans" {
+  account_id  = var.cloudflare_account_id
+  name        = "homelab_ip_bans"
+  description = "Temporary bans managed by the ip-bans CronJobs; items are not tracked by OpenTofu."
+  kind        = "ip"
 }
 
 # The Free plan permits one rate-limiting rule, a ten-second counting period,

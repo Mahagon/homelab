@@ -1,0 +1,174 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ip-bans
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ip-bans
+  namespace: ip-bans
+automountServiceAccountToken: false
+---
+# The ip-bans Secret is created out of band by
+# infrastructure/opentofu/home-assistant-alexa/scripts/set-ip-bans-secret.sh.
+# Ban 24 h on reconnaissance-rule hits; the window overlaps runs, so a missed
+# run is caught up by the next one.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ip-bans-recon
+  namespace: ip-bans
+spec:
+  schedule: "*/5 * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 240
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 280
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: ip-bans
+            app.kubernetes.io/component: recon
+        spec:
+          restartPolicy: Never
+          serviceAccountName: ip-bans
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: sync
+              image: python:3.15.1-alpine3.24@sha256:54448f67d7c31c39e5cdd3ea2d6382395ce142806c284425f8e897d78a0465b3
+              command: ["python", "-I", "/opt/ip-bans/sync_ip_bans.py", "recon"]
+              envFrom:
+                - secretRef:
+                    name: ip-bans
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                - name: RECON_RULE_REF
+                  value: home_assistant_reconnaissance_paths
+                - name: BAN_HOURS
+                  value: "24"
+                - name: RECON_LOOKBACK_MINUTES
+                  value: "60"
+                - name: ABUSEIPDB_REPORT
+                  value: "true"
+                - name: ABUSEIPDB_REPORT_LIMIT
+                  value: "50"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /opt/ip-bans
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: ip-bans-script
+                defaultMode: 0444
+---
+# Free AbuseIPDB keys allow 5 blacklist downloads a day; four scheduled runs
+# leave one for a manual `kubectl create job --from=cronjob/ip-bans-abuseipdb`.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ip-bans-abuseipdb
+  namespace: ip-bans
+spec:
+  schedule: "17 */6 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: ip-bans
+            app.kubernetes.io/component: abuseipdb
+        spec:
+          restartPolicy: Never
+          serviceAccountName: ip-bans
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: sync
+              image: python:3.15.1-alpine3.24@sha256:54448f67d7c31c39e5cdd3ea2d6382395ce142806c284425f8e897d78a0465b3
+              command: ["python", "-I", "/opt/ip-bans/sync_ip_bans.py", "abuseipdb"]
+              envFrom:
+                - secretRef:
+                    name: ip-bans
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                # Matches the geo allowlists in cloudflare-security.tf.
+                - name: ABUSEIPDB_COUNTRIES
+                  value: DE
+                - name: ABUSEIPDB_MAX_AGE_DAYS
+                  value: "7"
+                # Leaves room in the 10,000-item Free quota for recon bans.
+                - name: ABUSEIPDB_MAX_ITEMS
+                  value: "8000"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 192Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /opt/ip-bans
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: ip-bans-script
+                defaultMode: 0444

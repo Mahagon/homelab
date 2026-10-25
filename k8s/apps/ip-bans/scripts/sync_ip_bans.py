@@ -1,0 +1,703 @@
+#!/usr/bin/env python3
+"""Keep the Cloudflare IP ban list in sync with WAF probes and AbuseIPDB.
+
+Two modes share one list and only change items whose comment carries their own
+tag, so manually added entries are never touched:
+
+- ``recon`` bans addresses that hit the reconnaissance-path WAF rule for
+  BAN_HOURS, reports new bans to AbuseIPDB, and removes expired bans.
+- ``abuseipdb`` mirrors recent AbuseIPDB blacklist entries from the allowed
+  countries; the geo rules already block every other country.
+
+Both modes exempt IP_BAN_ALLOWLIST and the job's own public addresses, so the
+home connection is never banned. Addresses are never logged: output is limited
+to counts and API error text is redacted, because pod logs leave the cluster.
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import datetime as dt
+import ipaddress
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Callable, Iterable, Mapping, Protocol, Union, cast
+
+IPNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
+JsonMap = dict[str, object]
+
+CLOUDFLARE_API = "https://api.cloudflare.com/client/v4"
+ABUSEIPDB_API = "https://api.abuseipdb.com/api/v2"
+# Cloudflare-operated, family-specific "what is my IP" endpoints.
+OWN_ADDRESS_URLS = {4: "https://ipv4.icanhazip.com", 6: "https://ipv6.icanhazip.com"}
+TAG_PREFIX = "ip-bans"
+RECON = "recon"
+ABUSEIPDB = "abuseipdb"
+# Cloudflare Free accounts hold 10,000 list items across all lists.
+LIST_CAPACITY = 10_000
+# Scanners rotate through their IPv6 /64, so a ban covers the whole prefix.
+IPV6_BAN_PREFIX = 64
+# AbuseIPDB category 21: Web App Attack.
+REPORT_CATEGORIES = "21"
+EVENT_LIMIT = 1000
+BUSY_RETRIES = 12
+BUSY_DELAY_SECONDS = 5
+OPERATION_POLLS = 60
+OPERATION_POLL_SECONDS = 2
+
+RECON_QUERY = """
+query ReconHits($zoneTag: string!, $ruleId: string!, $since: Time!, $until: Time!) {
+  viewer {
+    zones(filter: {zoneTag: $zoneTag}) {
+      firewallEventsAdaptive(
+        filter: {ruleId: $ruleId, action: "block", datetime_geq: $since, datetime_leq: $until}
+        limit: %d
+        orderBy: [datetime_DESC]
+      ) {
+        clientIP
+        clientRequestPath
+        datetime
+      }
+    }
+  }
+}
+""" % EVENT_LIMIT
+
+# Runs of characters that can form an address; each run is searched for IPs.
+ADDRESS_RUN = re.compile(r"[0-9A-Fa-f:./]+")
+# Longest textual IPv6 network, e.g. "ffff:...:255.255.255.255/128".
+MAX_ADDRESS_LENGTH = 50
+
+
+class SyncError(Exception):
+    """A failure that should end the run with a non-zero exit code."""
+
+
+def as_map(value: object) -> JsonMap:
+    return cast(JsonMap, value) if isinstance(value, dict) else {}
+
+
+def as_list(value: object) -> list[object]:
+    return cast(list[object], value) if isinstance(value, list) else []
+
+
+def is_address(candidate: str) -> bool:
+    if ":" not in candidate and candidate.count(".") != 3:
+        return False
+    try:
+        ipaddress.ip_network(candidate, strict=False)
+    except ValueError:
+        return False
+    return True
+
+
+def redact(text: str) -> str:
+    """Replace anything that parses as an IP address or network with <ip>."""
+
+    def replace(match: re.Match[str]) -> str:
+        run = match.group(0)
+        start = 0
+        parts: list[str] = []
+        while start < len(run):
+            for end in range(min(len(run), start + MAX_ADDRESS_LENGTH), start + 1, -1):
+                if is_address(run[start:end]):
+                    parts.append("<ip>")
+                    start = end
+                    break
+            else:
+                parts.append(run[start])
+                start += 1
+        return "".join(parts)
+
+    return ADDRESS_RUN.sub(replace, text)
+
+
+def parse_time(value: str) -> dt.datetime:
+    """Parse an ISO 8601 timestamp, assuming UTC when no offset is given."""
+    parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def format_time(value: dt.datetime) -> str:
+    return value.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def ban_network(value: str) -> IPNetwork:
+    """Return the network to ban for an address: itself, or its IPv6 /64."""
+    network = ipaddress.ip_network(value.strip(), strict=False)
+    if network.version == 6 and network.prefixlen > IPV6_BAN_PREFIX:
+        network = network.supernet(new_prefix=IPV6_BAN_PREFIX)
+    return network
+
+
+def list_value(network: IPNetwork) -> str:
+    """Format a network the way list items are keyed: bare address for hosts."""
+    if network.prefixlen == network.max_prefixlen:
+        return str(network.network_address)
+    return str(network)
+
+
+def make_tag(source: str, when: dt.datetime) -> str:
+    return f"{TAG_PREFIX}:{source}:{format_time(when)}"
+
+
+def parse_tag(comment: str | None) -> tuple[str, dt.datetime] | None:
+    """Return (source, timestamp) for comments this script wrote, else None."""
+    parts = (comment or "").split(":", 2)
+    if len(parts) != 3 or parts[0] != TAG_PREFIX or parts[1] not in {RECON, ABUSEIPDB}:
+        return None
+    try:
+        return parts[1], parse_time(parts[2])
+    except ValueError:
+        return None
+
+
+def allowlisted(network: IPNetwork, allowlist: Iterable[IPNetwork]) -> bool:
+    return any(
+        network.version == allowed.version and network.overlaps(allowed)
+        for allowed in allowlist
+    )
+
+
+def env_int(env: Mapping[str, str], name: str, default: int) -> int:
+    raw = env.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SyncError(f"{name} must be an integer") from None
+    if value < 0:
+        raise SyncError(f"{name} must not be negative")
+    return value
+
+
+def env_bool(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = env.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw not in {"0", "false", "no"}
+
+
+@dataclasses.dataclass(frozen=True)
+class Config:
+    cloudflare_token: str
+    account_id: str
+    zone_id: str
+    list_id: str
+    abuseipdb_key: str = ""
+    allowlist: tuple[IPNetwork, ...] = ()
+    detect_own_addresses: bool = True
+    recon_rule_ref: str = "home_assistant_reconnaissance_paths"
+    ban_hours: int = 24
+    recon_lookback_minutes: int = 60
+    report: bool = True
+    report_limit: int = 50
+    countries: frozenset[str] = frozenset({"DE"})
+    max_report_age_days: int = 7
+    abuseipdb_max_items: int = 8000
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str]) -> Config:
+        required: dict[str, str] = {}
+        for name in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_ZONE_ID", "CLOUDFLARE_LIST_ID"):
+            value = env.get(name, "").strip()
+            if not value:
+                raise SyncError(f"{name} is required")
+            required[name] = value
+
+        allowlist: list[IPNetwork] = []
+        for entry in re.split(r"[\s,]+", env.get("IP_BAN_ALLOWLIST", "").strip()):
+            if not entry:
+                continue
+            try:
+                allowlist.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError:
+                # The entry itself is not echoed: it is an address.
+                raise SyncError("IP_BAN_ALLOWLIST contains an invalid entry") from None
+
+        countries = frozenset(
+            code.strip().upper()
+            for code in env.get("ABUSEIPDB_COUNTRIES", "DE").split(",")
+            if code.strip()
+        )
+        if not countries:
+            raise SyncError("ABUSEIPDB_COUNTRIES must name at least one country")
+
+        return cls(
+            cloudflare_token=required["CLOUDFLARE_API_TOKEN"],
+            account_id=required["CLOUDFLARE_ACCOUNT_ID"],
+            zone_id=required["CLOUDFLARE_ZONE_ID"],
+            list_id=required["CLOUDFLARE_LIST_ID"],
+            abuseipdb_key=env.get("ABUSEIPDB_API_KEY", "").strip(),
+            allowlist=tuple(allowlist),
+            detect_own_addresses=env_bool(env, "DETECT_OWN_ADDRESSES", cls.detect_own_addresses),
+            recon_rule_ref=env.get("RECON_RULE_REF", "").strip() or cls.recon_rule_ref,
+            ban_hours=env_int(env, "BAN_HOURS", cls.ban_hours),
+            recon_lookback_minutes=env_int(env, "RECON_LOOKBACK_MINUTES", cls.recon_lookback_minutes),
+            report=env_bool(env, "ABUSEIPDB_REPORT", cls.report),
+            report_limit=env_int(env, "ABUSEIPDB_REPORT_LIMIT", cls.report_limit),
+            countries=countries,
+            max_report_age_days=env_int(env, "ABUSEIPDB_MAX_AGE_DAYS", cls.max_report_age_days),
+            abuseipdb_max_items=env_int(env, "ABUSEIPDB_MAX_ITEMS", cls.abuseipdb_max_items),
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class ListItem:
+    id: str
+    network: IPNetwork
+    comment: str
+
+    @property
+    def value(self) -> str:
+        return list_value(self.network)
+
+    @property
+    def tag(self) -> tuple[str, dt.datetime] | None:
+        return parse_tag(self.comment)
+
+    @property
+    def source(self) -> str | None:
+        tag = self.tag
+        return tag[0] if tag else None
+
+
+@dataclasses.dataclass(frozen=True)
+class Hit:
+    address: str
+    path: str
+    seen: dt.datetime
+
+
+@dataclasses.dataclass
+class Plan:
+    upserts: dict[str, str] = dataclasses.field(default_factory=lambda: {})
+    deletes: list[str] = dataclasses.field(default_factory=lambda: [])
+    new_bans: list[Hit] = dataclasses.field(default_factory=lambda: [])
+    listed: int = 0
+
+
+def plan_recon(
+    items: Mapping[str, ListItem], hits: Mapping[str, Hit], now: dt.datetime, config: Config
+) -> Plan:
+    """Ban new probe sources, keep active bans, and expire old or allowlisted ones."""
+    plan = Plan()
+    expiry = now - dt.timedelta(hours=config.ban_hours)
+
+    for value, hit in hits.items():
+        if hit.seen <= expiry or allowlisted(ban_network(value), config.allowlist):
+            continue
+        item = items.get(value)
+        if item is not None and item.tag is None:
+            continue  # A manual entry already blocks it.
+        tag = item.tag if item is not None else None
+        if tag is not None and tag[0] == RECON and tag[1] > expiry:
+            # Hits from before the list update took effect: keep the latest.
+            if tag[1] < hit.seen:
+                plan.upserts[value] = make_tag(RECON, hit.seen)
+            continue
+        plan.upserts[value] = make_tag(RECON, hit.seen)
+        plan.new_bans.append(hit)
+
+    for item in items.values():
+        tag = item.tag
+        if tag is None or item.value in plan.upserts:
+            continue
+        expired = tag[0] == RECON and tag[1] <= expiry
+        if expired or allowlisted(item.network, config.allowlist):
+            plan.deletes.append(item.id)
+    return plan
+
+
+def plan_import(
+    items: Mapping[str, ListItem], entries: Iterable[JsonMap], now: dt.datetime, config: Config
+) -> Plan:
+    """Mirror recent blacklist entries from allowed countries into free list slots."""
+    cutoff = now - dt.timedelta(days=config.max_report_age_days)
+    wanted: dict[str, str] = {}
+    # The blacklist is ordered by confidence, so truncation keeps the worst.
+    for entry in entries:
+        if str(entry.get("countryCode", "")).upper() not in config.countries:
+            continue
+        try:
+            network = ban_network(str(entry["ipAddress"]))
+            reported = parse_time(str(entry["lastReportedAt"]))
+        except (KeyError, ValueError):
+            continue
+        if reported < cutoff or allowlisted(network, config.allowlist):
+            continue
+        wanted.setdefault(list_value(network), make_tag(ABUSEIPDB, reported))
+
+    others = sum(1 for item in items.values() if item.source != ABUSEIPDB)
+    room = max(0, min(config.abuseipdb_max_items, LIST_CAPACITY - others))
+    plan = Plan()
+    kept: set[str] = set()
+    for value, comment in wanted.items():
+        if len(kept) >= room:
+            break
+        item = items.get(value)
+        if item is not None and item.source != ABUSEIPDB:
+            continue  # Recon bans and manual entries take precedence.
+        kept.add(value)
+        if item is None or item.comment != comment:
+            plan.upserts[value] = comment
+
+    plan.deletes = [
+        item.id for item in items.values() if item.source == ABUSEIPDB and item.value not in kept
+    ]
+    plan.listed = len(kept)
+    return plan
+
+
+class Response(Protocol):
+    status: int
+
+    def read(self) -> bytes: ...
+    def __enter__(self) -> Response: ...
+    def __exit__(self, *args: object) -> object: ...
+
+
+Opener = Callable[..., Response]
+
+
+class Http:
+    """Minimal HTTP client; the opener and sleep are injectable for tests."""
+
+    def __init__(
+        self,
+        opener: Opener = cast(Opener, urllib.request.urlopen),
+        sleep: Callable[[float], None] = time.sleep,
+        timeout: float = 30,
+    ) -> None:
+        self.opener = opener
+        self.sleep = sleep
+        self.timeout = timeout
+
+    def fetch(
+        self, method: str, url: str, headers: Mapping[str, str], body: bytes | None = None
+    ) -> tuple[int, bytes]:
+        request = urllib.request.Request(url, data=body, method=method, headers=dict(headers))
+        try:
+            with self.opener(request, timeout=self.timeout) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.read()
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            host = urllib.parse.urlsplit(url).hostname
+            raise SyncError(f"{method} {host} failed: {redact(str(error))}") from None
+
+    def request(
+        self, method: str, url: str, headers: Mapping[str, str], body: bytes | None = None
+    ) -> tuple[int, JsonMap]:
+        status, payload = self.fetch(method, url, headers, body)
+        try:
+            data: object = json.loads(payload or b"{}")
+        except ValueError:
+            data = {}
+        return status, as_map(data)
+
+
+def error_summary(data: Mapping[str, object]) -> str:
+    parts: list[str] = []
+    for error in as_list(data.get("errors"))[:3]:
+        details = as_map(error)
+        parts.append(f"{details.get('code', '?')}: {redact(str(details.get('message', '')))}")
+    return "; ".join(parts) or "no error details"
+
+
+def own_networks(http: Http) -> dict[int, IPNetwork]:
+    """Return this connection's public networks by IP version, as ban-sized networks.
+
+    A single-stack IPv4 cluster has no IPv6 route, so IPv6 is usually missing.
+    """
+    found: dict[int, IPNetwork] = {}
+    for version, url in OWN_ADDRESS_URLS.items():
+        try:
+            status, payload = http.fetch("GET", url, {"Accept": "text/plain"})
+        except SyncError:
+            continue
+        if status != 200:
+            continue
+        try:
+            network = ban_network(payload.decode("ascii", "replace").strip())
+        except ValueError:
+            continue
+        if network.version == version:
+            found[version] = network
+    return found
+
+
+class Cloudflare:
+    def __init__(self, http: Http, config: Config) -> None:
+        self.http = http
+        self.config = config
+
+    def call(
+        self,
+        label: str,
+        method: str,
+        path: str,
+        *,
+        query: Mapping[str, str] | None = None,
+        payload: object = None,
+        retry_busy: bool = False,
+    ) -> JsonMap:
+        url = CLOUDFLARE_API + path
+        if query:
+            url += "?" + urllib.parse.urlencode(query)
+        headers = {
+            "Authorization": f"Bearer {self.config.cloudflare_token}",
+            "Accept": "application/json",
+        }
+        body = None
+        if payload is not None:
+            body = json.dumps(payload).encode()
+            headers["Content-Type"] = "application/json"
+        status, data = 0, {}
+        for attempt in range(BUSY_RETRIES):
+            status, data = self.http.request(method, url, headers, body)
+            # A 429 on list writes means an earlier bulk operation is still running.
+            if status == 429 and retry_busy and attempt < BUSY_RETRIES - 1:
+                self.http.sleep(BUSY_DELAY_SECONDS)
+                continue
+            break
+        # Labels name the operation; paths carry account and list IDs.
+        if status >= 400 or data.get("success") is False:
+            raise SyncError(f"Cloudflare {label} returned HTTP {status} ({error_summary(data)})")
+        return data
+
+    def list_items(self) -> dict[str, ListItem]:
+        items: dict[str, ListItem] = {}
+        cursor = ""
+        while True:
+            query = {"per_page": "500"}
+            if cursor:
+                query["cursor"] = cursor
+            data = self.call(
+                "list items read",
+                "GET",
+                f"/accounts/{self.config.account_id}/rules/lists/{self.config.list_id}/items",
+                query=query,
+            )
+            for raw in map(as_map, as_list(data.get("result"))):
+                if "ip" not in raw:
+                    continue
+                try:
+                    network = ipaddress.ip_network(str(raw["ip"]), strict=False)
+                except ValueError:
+                    continue
+                item = ListItem(str(raw.get("id", "")), network, str(raw.get("comment") or ""))
+                items[item.value] = item
+            cursors = as_map(as_map(data.get("result_info")).get("cursors"))
+            cursor = str(cursors.get("after") or "")
+            if not cursor:
+                return items
+
+    def write(self, plan: Plan) -> None:
+        path = f"/accounts/{self.config.account_id}/rules/lists/{self.config.list_id}/items"
+        if plan.upserts:
+            # Creating an item that already exists updates its comment in place.
+            payload = [{"ip": value, "comment": comment} for value, comment in plan.upserts.items()]
+            self.wait(self.call("list items upsert", "POST", path, payload=payload, retry_busy=True))
+        if plan.deletes:
+            payload = {"items": [{"id": item_id} for item_id in plan.deletes]}
+            self.wait(self.call("list items delete", "DELETE", path, payload=payload, retry_busy=True))
+
+    def wait(self, data: Mapping[str, object]) -> None:
+        operation_id = as_map(data.get("result")).get("operation_id")
+        if not operation_id:
+            raise SyncError("Cloudflare list write returned no operation ID")
+        path = f"/accounts/{self.config.account_id}/rules/lists/bulk_operations/{operation_id}"
+        for _ in range(OPERATION_POLLS):
+            result = as_map(self.call("bulk operation status", "GET", path).get("result"))
+            state = result.get("status")
+            if state == "completed":
+                return
+            if state == "failed":
+                raise SyncError(f"Cloudflare list write failed: {redact(str(result.get('error', '')))}")
+            self.http.sleep(OPERATION_POLL_SECONDS)
+        raise SyncError("Cloudflare list write did not finish in time")
+
+    def rule_id(self, ref: str) -> str:
+        data = self.call(
+            "custom ruleset read",
+            "GET",
+            f"/zones/{self.config.zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint",
+        )
+        for rule in map(as_map, as_list(as_map(data.get("result")).get("rules"))):
+            if rule.get("ref") == ref and rule.get("id"):
+                return str(rule["id"])
+        raise SyncError(f"custom WAF rule with ref {ref!r} not found")
+
+    def recon_hits(self, rule_id: str, since: dt.datetime, until: dt.datetime) -> tuple[dict[str, Hit], int]:
+        """Return the latest hit per ban network and the number of events read."""
+        variables = {
+            "zoneTag": self.config.zone_id,
+            "ruleId": rule_id,
+            "since": format_time(since),
+            "until": format_time(until),
+        }
+        data = self.call("firewall events query", "POST", "/graphql", payload={"query": RECON_QUERY, "variables": variables})
+        if as_list(data.get("errors")):
+            raise SyncError(f"Cloudflare firewall events query failed ({error_summary(data)})")
+        zones = as_list(as_map(as_map(data.get("data")).get("viewer")).get("zones"))
+        if not zones:
+            raise SyncError("Cloudflare firewall events query returned no zone data")
+        events = as_list(as_map(zones[0]).get("firewallEventsAdaptive"))
+
+        hits: dict[str, Hit] = {}
+        for event in map(as_map, events):
+            try:
+                address = str(event["clientIP"])
+                value = list_value(ban_network(address))
+                seen = parse_time(str(event["datetime"]))
+            except (KeyError, ValueError):
+                continue
+            current = hits.get(value)
+            if current is None or seen > current.seen:
+                hits[value] = Hit(address, str(event.get("clientRequestPath") or "/"), seen)
+        return hits, len(events)
+
+
+class QuotaExhausted(Exception):
+    """AbuseIPDB answered 429: the daily quota for this endpoint is used up."""
+
+
+def abuseipdb_errors(data: Mapping[str, object]) -> JsonMap:
+    """Map AbuseIPDB's {errors: [{detail, status}]} to the Cloudflare shape."""
+    errors: list[object] = [
+        {"code": details.get("status", "?"), "message": details.get("detail", "")}
+        for details in map(as_map, as_list(data.get("errors")))
+    ]
+    return {"errors": errors}
+
+
+class AbuseIPDB:
+    def __init__(self, http: Http, key: str) -> None:
+        self.http = http
+        self.key = key
+
+    def headers(self) -> dict[str, str]:
+        return {"Key": self.key, "Accept": "application/json"}
+
+    def blacklist(self) -> list[JsonMap]:
+        # Free keys get the 10,000 highest-confidence entries; country filtering
+        # happens client-side because onlyCountries is a paid feature.
+        status, data = self.http.request("GET", f"{ABUSEIPDB_API}/blacklist?limit=10000", self.headers())
+        if status == 429:
+            raise SyncError("AbuseIPDB blacklist quota exhausted for today")
+        if status >= 400:
+            raise SyncError(f"AbuseIPDB blacklist returned HTTP {status} ({error_summary(abuseipdb_errors(data))})")
+        if not isinstance(data.get("data"), list):
+            raise SyncError("AbuseIPDB blacklist response has no data")
+        return [entry for entry in map(as_map, as_list(data.get("data"))) if entry]
+
+    def report(self, hit: Hit) -> bool:
+        form = urllib.parse.urlencode(
+            {
+                "ip": hit.address,
+                "categories": REPORT_CATEGORIES,
+                # Path only: the hostname would reveal the protected domain.
+                "comment": f"Blocked by Cloudflare WAF: probe for {hit.path[:120]}",
+                "timestamp": format_time(hit.seen),
+            }
+        ).encode()
+        headers = self.headers() | {"Content-Type": "application/x-www-form-urlencoded"}
+        status, _ = self.http.request("POST", f"{ABUSEIPDB_API}/report", headers, form)
+        if status == 429:
+            raise QuotaExhausted
+        return status < 400
+
+
+def run_recon(config: Config, cloudflare: Cloudflare, abuseipdb: AbuseIPDB | None, now: dt.datetime) -> str:
+    items = cloudflare.list_items()
+    rule_id = cloudflare.rule_id(config.recon_rule_ref)
+    since = now - dt.timedelta(minutes=config.recon_lookback_minutes)
+    hits, events = cloudflare.recon_hits(rule_id, since, now)
+    plan = plan_recon(items, hits, now, config)
+    cloudflare.write(plan)
+
+    reported = failed = 0
+    if abuseipdb is not None and config.report:
+        for hit in plan.new_bans[: config.report_limit]:
+            try:
+                if abuseipdb.report(hit):
+                    reported += 1
+                else:
+                    failed += 1
+            except QuotaExhausted:
+                failed += 1
+                break
+            except SyncError:
+                failed += 1
+
+    summary = (
+        f"recon: events={events} sources={len(hits)} banned={len(plan.new_bans)} "
+        f"extended={len(plan.upserts) - len(plan.new_bans)} removed={len(plan.deletes)} "
+        f"reported={reported} report_failures={failed}"
+    )
+    if events >= EVENT_LIMIT:
+        summary += " (event limit reached; older hits in the window were skipped)"
+    return summary
+
+
+def run_import(config: Config, cloudflare: Cloudflare, abuseipdb: AbuseIPDB | None, now: dt.datetime) -> str:
+    if abuseipdb is None:
+        raise SyncError("ABUSEIPDB_API_KEY is required for abuseipdb mode")
+    entries = abuseipdb.blacklist()
+    items = cloudflare.list_items()
+    plan = plan_import(items, entries, now, config)
+    cloudflare.write(plan)
+    return (
+        f"abuseipdb: blacklist={len(entries)} listed={plan.listed} "
+        f"added_or_updated={len(plan.upserts)} removed={len(plan.deletes)}"
+    )
+
+
+def with_own_networks(config: Config, http: Http) -> tuple[Config, str]:
+    """Add the job's public networks to the allowlist; refuse to run without IPv4."""
+    if not config.detect_own_addresses:
+        return config, "own_ipv4=skipped own_ipv6=skipped"
+    own = own_networks(http)
+    if 4 not in own:
+        raise SyncError("could not detect the own public IPv4 address; no bans were changed")
+    status = f"own_ipv4=exempt own_ipv6={'exempt' if 6 in own else 'not detected'}"
+    return dataclasses.replace(config, allowlist=config.allowlist + tuple(own.values())), status
+
+
+def main(
+    argv: list[str] | None = None,
+    env: Mapping[str, str] | None = None,
+    http: Http | None = None,
+    now: dt.datetime | None = None,
+) -> int:
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser.add_argument("mode", choices=[RECON, ABUSEIPDB])
+    args = parser.parse_args(argv)
+    try:
+        config = Config.from_env(os.environ if env is None else env)
+        http = http or Http()
+        config, own_status = with_own_networks(config, http)
+        cloudflare = Cloudflare(http, config)
+        abuseipdb = AbuseIPDB(http, config.abuseipdb_key) if config.abuseipdb_key else None
+        moment = now or dt.datetime.now(dt.timezone.utc)
+        run = run_recon if args.mode == RECON else run_import
+        print(f"{run(config, cloudflare, abuseipdb, moment)} {own_status}", flush=True)
+    except SyncError as error:
+        print(f"error: {error}", file=sys.stderr, flush=True)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

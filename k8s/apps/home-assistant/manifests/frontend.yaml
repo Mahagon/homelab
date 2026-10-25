@@ -138,7 +138,7 @@ data:
                 entity: sensor.export_power
                 above: 50
           - type: entity
-            entity: sensor.https_paperless_danieljacobs_de_dokumente_im_posteingang
+            entity: sensor.paperless_dokumente_im_posteingang
             name: Posteingang
             icon: mdi:inbox-full
             color: purple
@@ -147,7 +147,7 @@ data:
             show_icon: true
             visibility:
               - condition: numeric_state
-                entity: sensor.https_paperless_danieljacobs_de_dokumente_im_posteingang
+                entity: sensor.paperless_dokumente_im_posteingang
                 above: 0
           - type: entity
             entity: binary_sensor.luftbefeuchter_wasserstand_niedrig
@@ -737,7 +737,7 @@ data:
                 heading: Einkaufsliste
                 icon: mdi:cart-outline
               - type: todo-list
-                entity: todo.mail_amazon_danieljacobs_de_einkaufsliste
+                entity: todo.einkaufsliste
                 hide_completed: true
                 grid_options:
                   columns: full
@@ -1292,12 +1292,12 @@ data:
                 heading: Paperless
                 icon: mdi:file-document-multiple-outline
               - type: tile
-                entity: sensor.https_paperless_danieljacobs_de_dokumente_im_posteingang
+                entity: sensor.paperless_dokumente_im_posteingang
                 name: Posteingang
                 icon: mdi:inbox
                 color: purple
               - type: tile
-                entity: sensor.https_paperless_danieljacobs_de_dokumente_insgesamt
+                entity: sensor.paperless_dokumente_insgesamt
                 name: Dokumente
                 icon: mdi:file-document-multiple
                 color: purple
