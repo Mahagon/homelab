@@ -73,7 +73,9 @@ spec:
 
                   # Shared lock with the other backup CronJob (same node, same hostPath);
                   # skip this run if a backup is still in progress. Released when the pod exits.
-                  exec 9>/backup/.homelab-backup.lock
+                  # Kept inside the repo dir: the mount root itself is not writable by the container.
+                  mkdir -p "$RESTIC_REPOSITORY"
+                  exec 9>"$RESTIC_REPOSITORY/.homelab-backup.lock"
                   if ! flock -n 9; then
                     echo "==> Another backup is still running, skipping this run."
                     exit 0
@@ -183,7 +185,9 @@ spec:
 
                   # Shared lock with the other backup CronJob (same node, same hostPath);
                   # skip this run if a backup is still in progress. Released when the pod exits.
-                  exec 9>/backup/.homelab-backup.lock
+                  # Kept inside the repo dir: the mount root itself is not writable by the container.
+                  mkdir -p "$RESTIC_REPOSITORY"
+                  exec 9>"$RESTIC_REPOSITORY/.homelab-backup.lock"
                   if ! flock -n 9; then
                     echo "==> Another backup is still running, skipping this run."
                     exit 0
