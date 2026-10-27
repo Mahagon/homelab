@@ -145,7 +145,6 @@ appear in shell history:
 
 Create a dedicated Cloudflare token; do not reuse the cert-manager or
 ExternalDNS token. Restrict
-Cloudflare token; do not reuse the cert-manager or ExternalDNS token. Restrict
 it to this account and zone with only:
 
 - Cloudflare Tunnel / cloudflared Connector: Read and Write.
@@ -158,6 +157,7 @@ it to this account and zone with only:
 - Bot Management: Read and Write for `<your-domain>` (AI Labyrinth; Bot Fight Mode is kept off because it challenges the Alexa Lambda).
 - Account Rulesets: Read and Write.
 - Account Filter Lists: Read and Write.
+- Notifications: Read and Write (tunnel health, HTTP DDoS, and Universal SSL email alerts).
 
 The GitHub role uses OIDC and accepts only the exact subject
 `repo:Mahagon/homelab:environment:aws-production`. It cannot be assumed by a

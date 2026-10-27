@@ -15,6 +15,9 @@ resource "cloudflare_zone_setting" "tls_1_3" {
 
 # Cloudflare signs the zone and returns the DS record. DNSSEC is not fully
 # chained until that DS value is published through the domain registrar.
+# GoDaddy cannot publish DS records for .de and Cloudflare Registrar does not
+# support .de, so the zone stays "pending" until the domain moves to a
+# registrar that does.
 resource "cloudflare_zone_dnssec" "zone" {
   zone_id = var.cloudflare_zone_id
   status  = "active"

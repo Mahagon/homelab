@@ -226,6 +226,16 @@ run "secure_stack_without_skill" {
     error_message = "Bot Fight Mode must stay off (it challenges the Alexa Lambda) and AI Labyrinth must be enabled."
   }
 
+  assert {
+    condition     = alltrue([for p in [cloudflare_notification_policy.tunnel_health, cloudflare_notification_policy.http_ddos, cloudflare_notification_policy.universal_ssl] : p.enabled && p.account_id == var.cloudflare_account_id && contains([for e in p.mechanisms.email : e.id], var.budget_email)])
+    error_message = "Cloudflare tunnel, DDoS, and Universal SSL notifications must be enabled and email the configured address."
+  }
+
+  assert {
+    condition     = cloudflare_notification_policy.tunnel_health.alert_type == "tunnel_health_event" && cloudflare_notification_policy.tunnel_health.filters.tunnel_id == tolist(["11111111-2222-3333-4444-555555555555"]) && cloudflare_notification_policy.http_ddos.filters.zones == tolist([var.cloudflare_zone_id]) && cloudflare_notification_policy.universal_ssl.filters.zones == tolist([var.cloudflare_zone_id])
+    error_message = "Notifications must be scoped to the homelab tunnel and zone."
+  }
+
 }
 
 run "backup_alerts_are_defined" {

@@ -11,7 +11,7 @@ Declarative home lab running on a GA-J1900N-D3V (8GB RAM, 256GB SSD, 4TB HDD).
 - USB flash drive for FCOS installation
 - Cloudflare account + least-privilege API tokens (DNS Read/Write and Zone Read; the
   Home Assistant OpenTofu token also needs Tunnel, Zone WAF, Cache Settings,
-  Transform Rules, Account Rulesets/Filter Lists, and Zone Settings Write)
+  Transform Rules, Account Rulesets/Filter Lists, Notifications, and Zone Settings Write)
 - kubectl + helm CLI
 - A workstation on the same network
 - Amazon Developer account and AWS account for the Alexa Smart Home Lambda
