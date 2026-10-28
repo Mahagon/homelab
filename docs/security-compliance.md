@@ -115,7 +115,10 @@ CI produces reproducible evidence through:
 - TFLint AWS rules.
 - Checkov on OpenTofu resources.
 - A repository-owned runtime policy over all raw workload manifests, including
-  embedded storage helper Pods, with time-bounded per-container exceptions.
+  embedded storage helper Pods, with time-bounded per-container exceptions. It
+  evaluates the effective container settings (container overrides pod) and
+  flags host namespaces, `hostPath` volumes, and capabilities added beyond
+  `NET_BIND_SERVICE`.
 - Trivy IaC, deployed-image, and repository-wide secret scans. The deployed
   inventory includes explicit raw-manifest images and images discovered by
   rendering every Argo CD Helm source.

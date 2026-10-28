@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import importlib
 import io
 import json
@@ -79,7 +80,7 @@ def control_event(token: str = "secret-control-token") -> dict:
 class LambdaHandlerTest(unittest.TestCase):
     context = SimpleNamespace(aws_request_id="aws-request-id")
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_discovery_forwards_to_home_assistant(self, urlopen):
         """Forward discovery directives with authorization and timeout."""
         expected = {"event": {"header": {"name": "Discover.Response"}, "payload": {"endpoints": []}}}
@@ -93,7 +94,7 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual("Bearer secret-discovery-token", request.headers["Authorization"])
         self.assertEqual(6.5, urlopen.call_args.kwargs["timeout"])
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_control_token_is_read_from_endpoint_scope(self, urlopen):
         """Read control authorization from the endpoint scope."""
         expected = {"event": {"header": {"name": "Response"}, "payload": {}}}
@@ -105,7 +106,7 @@ class LambdaHandlerTest(unittest.TestCase):
         request = urlopen.call_args.args[0]
         self.assertEqual("Bearer secret-control-token", request.headers["Authorization"])
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_missing_token_is_rejected_without_origin_call(self, urlopen):
         """Reject missing authorization before contacting Home Assistant."""
         actual = lambda_function.lambda_handler(discovery_event(token=None), self.context)
@@ -113,7 +114,7 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual("INVALID_AUTHORIZATION_CREDENTIAL", actual["event"]["payload"]["type"])
         urlopen.assert_not_called()
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_payload_v2_is_rejected(self, urlopen):
         """Reject unsupported Alexa payload versions."""
         event = discovery_event()
@@ -124,7 +125,7 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual("INVALID_DIRECTIVE", actual["event"]["payload"]["type"])
         urlopen.assert_not_called()
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_unauthorized_origin_maps_to_authorization_error(self, urlopen):
         """Map origin authorization failures to Alexa authorization errors."""
         urlopen.side_effect = HTTPError("https://example", 401, "Unauthorized", {}, io.BytesIO())
@@ -134,7 +135,7 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual("INVALID_AUTHORIZATION_CREDENTIAL", actual["event"]["payload"]["type"])
         self.assertEqual("light#licht_2", actual["event"]["endpoint"]["endpointId"])
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_unreachable_origin_maps_to_endpoint_unreachable(self, urlopen):
         """Map origin connection failures to endpoint-unreachable errors."""
         urlopen.side_effect = URLError("timeout")
@@ -143,7 +144,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertEqual("ENDPOINT_UNREACHABLE", actual["event"]["payload"]["type"])
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_oversized_origin_response_is_rejected(self, urlopen):
         """Reject origin responses exceeding the configured size limit."""
         urlopen.return_value = FakeResponse(b"x" * (lambda_function.MAX_PAYLOAD_BYTES + 1))
@@ -152,7 +153,7 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertEqual("INTERNAL_ERROR", actual["event"]["payload"]["type"])
 
-    @mock.patch.object(lambda_function.urllib.request, "urlopen")
+    @mock.patch.object(lambda_function._OPENER, "open")
     def test_access_token_is_never_logged(self, urlopen):
         """Keep bearer tokens out of application logs."""
         token = "do-not-log-this-token"
@@ -162,6 +163,43 @@ class LambdaHandlerTest(unittest.TestCase):
             lambda_function.lambda_handler(control_event(token), self.context)
 
         self.assertNotIn(token, "\n".join(logs.output))
+
+    def test_opener_does_not_follow_redirects(self):
+        """Keep the bearer token from being forwarded to a redirect target."""
+        redirect_handlers = [
+            handler
+            for handler in lambda_function._OPENER.handlers
+            if isinstance(handler, lambda_function.urllib.request.HTTPRedirectHandler)
+        ]
+        self.assertEqual(1, len(redirect_handlers))
+        self.assertIsInstance(redirect_handlers[0], lambda_function._NoRedirectHandler)
+        request = lambda_function.urllib.request.Request("https://homeassistant.example.invalid")
+        followed = redirect_handlers[0].redirect_request(
+            request, io.BytesIO(), 302, "Found", {}, "https://attacker.example.invalid/"
+        )
+        self.assertIsNone(followed)
+
+    @mock.patch.object(lambda_function._OPENER, "open")
+    def test_redirecting_origin_maps_to_endpoint_unreachable(self, urlopen):
+        """Treat an unfollowed redirect as an origin failure."""
+        urlopen.side_effect = HTTPError("https://example", 302, "Found", {}, io.BytesIO())
+
+        actual = lambda_function.lambda_handler(control_event(), self.context)
+
+        self.assertEqual("ENDPOINT_UNREACHABLE", actual["event"]["payload"]["type"])
+
+    @mock.patch.object(lambda_function._OPENER, "open")
+    def test_read_phase_network_errors_map_to_endpoint_unreachable(self, urlopen):
+        """Return an Alexa error when the connection drops while reading the body."""
+        for error in (ConnectionResetError(), http.client.IncompleteRead(b"")):
+            with self.subTest(error=type(error).__name__):
+                response = FakeResponse({})
+                response.read = mock.Mock(side_effect=error)
+                urlopen.return_value = response
+
+                actual = lambda_function.lambda_handler(control_event(), self.context)
+
+                self.assertEqual("ENDPOINT_UNREACHABLE", actual["event"]["payload"]["type"])
 
 
 if __name__ == "__main__":

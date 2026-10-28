@@ -114,15 +114,15 @@ ssh core@<your-server-ip>
 # K3s is auto-installed via Ignition - verify:
 sudo systemctl status k3s
 
-# From your workstation, copy the kubeconfig:
-scp core@<server-ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/config
+# From your workstation, copy the kubeconfig (root-only on the node):
+(umask 077 && ssh core@<server-ip> sudo cat /etc/rancher/k3s/k3s.yaml > ~/.kube/config)
 # Fix the server address in the kubeconfig
 
 # Bootstrap ArgoCD + secrets.
 # The script will prompt for GitHub OAuth credentials for ArgoCD and Paperless-ngx.
 cd k8s/bootstrap/
 DOMAIN=example.com EMAIL=you@example.com REPO_URL=git@github.com:Mahagon/homelab.git \
-  ./install-argocd.sh
+  ./bootstrap.sh
 ```
 
 ### 4. Deploy the App-of-Apps
@@ -157,10 +157,20 @@ The associated cost-aware CIS evidence and exceptions are documented in
 
 ### 5. Run Tests
 
+The checks run in CI by `.github/workflows/security-iac.yml` need only the
+Python standard library and OpenTofu locally:
+
 ```bash
-cd tests/
-pip install -r requirements.txt
-HOMELAB_DOMAIN=example.com pytest -v
+python -m unittest discover -s .github/scripts/tests -p "test_*.py" -v
+python .github/scripts/kubernetes_policy.py
+python -m unittest discover -s k8s/apps/home-assistant/scripts/tests -p "test_*.py" -v
+python -m unittest discover -s k8s/apps/ip-bans/scripts/tests -p "test_*.py" -v
+(cd infrastructure/opentofu/home-assistant-alexa/main && python -m unittest discover -s tests -p "test_*.py" -v)
+for d in bootstrap main; do
+  tofu -chdir=infrastructure/opentofu/home-assistant-alexa/$d init -backend=false -input=false
+  tofu -chdir=infrastructure/opentofu/home-assistant-alexa/$d validate
+  tofu -chdir=infrastructure/opentofu/home-assistant-alexa/$d test
+done
 ```
 
 ## Storage Layout
@@ -179,21 +189,26 @@ Daily incremental backups via restic at 01:00 (before the Zincati update window 
 
 [![Backup data flow](docs/diagrams/backup.svg)](docs/diagrams/backup.mmd)
 
-**Retention policy:** 7 daily · 4 weekly · 6 monthly snapshots per tag.
+**Retention policy:** SSD volumes, PostgreSQL dump, and Paperless media: 7 daily · 4 weekly ·
+6 monthly snapshots per tag. HDD volumes: 8 weekly snapshots.
+
+> **Escrow the restic password off the cluster.** It is generated in-cluster by
+> secret-generator and exists nowhere else; if the SSD is lost, the USB backup
+> cannot be decrypted without it. Store it offline (not in the in-cluster
+> Vaultwarden) right after the first sync:
+>
+> ```bash
+> kubectl get secret restic-credentials -n backup -o jsonpath='{.data.password}' | base64 -d
+> ```
 
 **Restore a snapshot:**
 
 ```bash
-# List snapshots
-kubectl run restic-restore --rm -it --restart=Never \
-  --image=restic/restic:latest \
-  --env="RESTIC_REPOSITORY=/backup/restic-repo" \
-  --env="RESTIC_PASSWORD=<password-from-secret>" \
-  --overrides='{"spec":{"volumes":[{"name":"backup","hostPath":{"path":"/var/mnt/backup"}}],"containers":[{"name":"restic-restore","image":"restic/restic:latest","command":["restic","snapshots"],"volumeMounts":[{"name":"backup","mountPath":"/backup"}]}]}}' \
-  -- restic snapshots
-
-# Get restic password
-kubectl get secret restic-credentials -n backup -o jsonpath='{.data.password}' | base64 -d
+# List snapshots. The password is read from the cluster Secret, so it never
+# lands in your shell history. Use the restic tag from backup-cronjob.yaml.
+kubectl run restic-restore -n backup --rm -it --restart=Never \
+  --image=restic/restic:0.19.1 \
+  --overrides='{"spec":{"volumes":[{"name":"backup","hostPath":{"path":"/var/mnt/backup","type":"Directory"}}],"containers":[{"name":"restic-restore","image":"restic/restic:0.19.1","args":["snapshots"],"env":[{"name":"RESTIC_REPOSITORY","value":"/backup/restic-repo"},{"name":"RESTIC_PASSWORD","valueFrom":{"secretKeyRef":{"name":"restic-credentials","key":"password"}}}],"volumeMounts":[{"name":"backup","mountPath":"/backup"}]}]}}'
 ```
 
 ## Service URLs (after deployment)

@@ -42,12 +42,16 @@ jobs:
     name: Deployment change detection
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       deploy: ${{ steps.detect.outputs.deploy }}
     steps:
       - name: Check out repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Detect deployable changes
@@ -57,6 +61,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
           REQUESTED_APPLY: ${{ inputs.apply }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           deploy=false
@@ -64,7 +69,16 @@ jobs:
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             deploy="${REQUESTED_APPLY}"
           elif [[ "${EVENT_NAME}" == "push" ]]; then
-            base="${BEFORE_SHA}"
+            # Diff from the last successful push run rather than only this push:
+            # a pending run superseded in the concurrency group, or a failed
+            # apply, would otherwise drop its changes from every later diff.
+            base="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow security-iac.yml \
+              --branch main --event push --status success --limit 1 \
+              --json headSha --jq '.[0].headSha // empty' 2>/dev/null || true)"
+            if [[ -z "${base}" ]] || ! git merge-base --is-ancestor "${base}" "${GITHUB_SHA}" 2>/dev/null; then
+              echo "::warning::No usable last successful run; diffing this push only."
+              base="${BEFORE_SHA}"
+            fi
             if [[ -z "${base}" || "${base}" == "0000000000000000000000000000000000000000" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
               base="$(git rev-parse "${GITHUB_SHA}^")"
             fi
@@ -91,6 +105,7 @@ jobs:
       - name: Check out repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Python
@@ -181,6 +196,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up OpenTofu
         uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
@@ -244,6 +261,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Render changed manifests
         shell: bash
@@ -350,6 +369,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Scan changed image without publishing details
         id: scan
@@ -393,6 +414,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Scan deployed image
         # Report-only: findings go to Code Scanning, not a red build.
@@ -481,6 +504,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Mask derived Home Assistant values
         shell: bash

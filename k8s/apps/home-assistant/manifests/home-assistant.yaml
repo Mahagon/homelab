@@ -258,6 +258,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: home-assistant-config
   namespace: home-assistant
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: local-path-ssd
@@ -324,17 +326,32 @@ spec:
                 - ALL
           args:
             - |
+              set -eu
               HACS_VERSION="2.0.5"
-              installed=$(grep -o '"version": *"[^"]*"' /config/custom_components/hacs/manifest.json 2>/dev/null | grep -o '[0-9][^"]*')
+              target=/config/custom_components/hacs
+              installed=$(grep -o '"version": *"[^"]*"' "$target/manifest.json" 2>/dev/null | grep -o '[0-9][^"]*' || true)
               if [ "$installed" = "$HACS_VERSION" ]; then
                 echo "HACS $HACS_VERSION already installed, skipping."
                 exit 0
               fi
-              apk add --no-cache wget unzip
-              wget -O /tmp/hacs.zip "https://github.com/hacs/integration/releases/download/${HACS_VERSION}/hacs.zip"
-              rm -rf /config/custom_components/hacs
-              mkdir -p /config/custom_components/hacs
-              unzip /tmp/hacs.zip -d /config/custom_components/hacs
+              # Download and verify before touching the installed copy, so a network
+              # failure never leaves Home Assistant without HACS or unable to start.
+              if ! { apk add --no-cache wget unzip &&
+                wget -q -O /tmp/hacs.zip "https://github.com/hacs/integration/releases/download/${HACS_VERSION}/hacs.zip" &&
+                unzip -tq /tmp/hacs.zip; }; then
+                if [ -n "$installed" ]; then
+                  echo "Could not fetch HACS $HACS_VERSION; keeping installed $installed."
+                  exit 0
+                fi
+                echo "Could not fetch HACS $HACS_VERSION and none is installed." >&2
+                exit 1
+              fi
+              rm -rf "$target.new"
+              mkdir -p "$target.new"
+              unzip -q /tmp/hacs.zip -d "$target.new"
+              rm -rf "$target"
+              mv "$target.new" "$target"
+              echo "Installed HACS $HACS_VERSION."
           volumeMounts:
             - name: config
               mountPath: /config

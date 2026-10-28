@@ -322,6 +322,30 @@ class EndToEndTests(unittest.TestCase):
         upsert = json.loads(api.bodies("POST", "/items")[0])
         self.assertEqual(upsert, [{"ip": LISTED_V4, "comment": "ip-bans:abuseipdb:2026-10-25T10:00:00Z"}])
 
+    def test_empty_blacklist_leaves_mirrored_entries(self):
+        mirrored = {"id": "kept", "ip": LISTED_V4, "comment": "ip-bans:abuseipdb:2026-10-24T08:00:00Z"}
+        api = FakeApi([], list_items=(mirrored,), blacklist=())
+        code, output = run("abuseipdb", api)
+        self.assertNotEqual(code, 0)
+        self.assertIn("empty blacklist", output)
+        self.assertEqual(api.bodies("DELETE", "/items"), [])
+        self.assert_no_addresses(output)
+
+    def test_config_repr_hides_credentials_and_allowlist(self):
+        config = m.Config(
+            cloudflare_token="cf-secret-token",
+            account_id="a",
+            zone_id="z",
+            list_id="l",
+            abuseipdb_key="abuse-secret-key",
+            allowlist=(ipaddress.ip_network(f"{OWN_V4}/32"),),
+        )
+        for hidden in ("cf-secret-token", "abuse-secret-key", OWN_V4):
+            self.assertNotIn(hidden, repr(config))
+
+    def test_off_disables_boolean_settings(self):
+        self.assertFalse(m.env_bool({"ABUSEIPDB_REPORT": "off"}, "ABUSEIPDB_REPORT", True))
+
     def test_own_addresses_are_never_banned(self):
         events = [
             {"clientIP": OWN_V4, "clientRequestPath": "/.git/config", "datetime": "2026-10-25T11:58:00Z"},

@@ -11,7 +11,7 @@ spec:
     updateMode: InPlaceOrRecreate
   resourcePolicy:
     containerPolicies:
-      # Only let the VPA tune requests; keep the statically-defined 4Gi memory
+      # Only let the VPA tune requests; keep the statically-defined 2Gi memory
       # limit so bursty transcodes aren't OOM-killed when the pod is idle.
       - containerName: jellyfin
         controlledValues: RequestsOnly

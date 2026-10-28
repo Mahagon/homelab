@@ -64,6 +64,66 @@ class KubernetesPolicyTests(unittest.TestCase):
                 controls,
             )
 
+    def controls_for(self, manifest_text: str) -> set[str]:
+        """Return the finding controls for a single manifest."""
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = pathlib.Path(directory) / "manifest.yaml"
+            manifest.write_text(manifest_text, encoding="utf-8")
+            return {finding.control for finding in findings([manifest])}
+
+    def test_container_cannot_override_pod_hardening(self):
+        """Report container settings that weaken compliant pod defaults."""
+        weakened = GOOD.replace(
+            "            allowPrivilegeEscalation: false\n",
+            "            allowPrivilegeEscalation: false\n"
+            "            runAsNonRoot: false\n"
+            "            seccompProfile:\n"
+            "              type: Unconfined\n",
+        )
+        self.assertEqual({"run-as-non-root", "seccomp-runtime-default"}, self.controls_for(weakened))
+
+    def test_root_user_is_reported_even_with_run_as_non_root(self):
+        """Treat an explicit UID 0 as a root workload."""
+        root_user = GOOD.replace(
+            "        runAsNonRoot: true\n", "        runAsNonRoot: true\n        runAsUser: 0\n"
+        )
+        self.assertEqual({"run-as-non-root"}, self.controls_for(root_user))
+
+    def test_container_level_hardening_satisfies_controls(self):
+        """Accept seccomp and non-root settings set only on the container."""
+        container_only = GOOD.replace(
+            "      securityContext:\n        runAsNonRoot: true\n"
+            "        seccompProfile:\n          type: RuntimeDefault\n",
+            "",
+        ).replace(
+            "            allowPrivilegeEscalation: false\n",
+            "            allowPrivilegeEscalation: false\n"
+            "            runAsNonRoot: true\n"
+            "            seccompProfile:\n"
+            "              type: RuntimeDefault\n",
+        )
+        self.assertEqual(set(), self.controls_for(container_only))
+
+    def test_reports_host_access(self):
+        """Report host namespaces, hostPath volumes, and added capabilities."""
+        host_access = GOOD.replace(
+            "      automountServiceAccountToken: false\n",
+            "      automountServiceAccountToken: false\n"
+            "      hostPID: true\n"
+            "      volumes:\n"
+            "        - name: host\n"
+            "          hostPath: {path: /var/lib}\n",
+        ).replace("drop: [ALL]", "drop: [ALL]\n              add: [SYS_ADMIN]")
+        self.assertEqual(
+            {"host-namespaces", "host-path-volumes", "added-capabilities"},
+            self.controls_for(host_access),
+        )
+
+    def test_net_bind_service_may_be_added(self):
+        """Allow the one capability Pod Security restricted permits."""
+        bind = GOOD.replace("drop: [ALL]", "drop: [ALL]\n              add: [NET_BIND_SERVICE]")
+        self.assertEqual(set(), self.controls_for(bind))
+
     def test_exception_must_be_current_and_used(self):
         """Accept current used exceptions and reject expired ones."""
         with tempfile.TemporaryDirectory() as directory:

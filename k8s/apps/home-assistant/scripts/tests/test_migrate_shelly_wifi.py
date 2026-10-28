@@ -63,6 +63,21 @@ class PureHelperTests(unittest.TestCase):
         self.assertFalse(m.is_shelly_target_placement(target, "skynet", *args))
 
 
+class TlsVerificationTests(unittest.TestCase):
+    def test_home_assistant_requests_verify_tls(self):
+        response = m.HttpResponse(200, {}, b"{}", "https://ha.example.invalid/api/")
+        with mock.patch.object(m, "http_request", return_value=response) as request:
+            m.ha_request("https://ha.example.invalid", "token", "GET", "/api/")
+        self.assertIs(True, request.call_args.kwargs["verify_tls"])
+
+    def test_verified_context_checks_certificates(self):
+        self.assertEqual(m.ssl.CERT_REQUIRED, m._VERIFIED_TLS.verify_mode)
+        self.assertTrue(m._VERIFIED_TLS.check_hostname)
+
+    def test_device_requests_tolerate_self_signed_certificates(self):
+        self.assertEqual(m.ssl.CERT_NONE, m._INSECURE_TLS.verify_mode)
+
+
 class InventoryAndStateTests(unittest.TestCase):
     def test_entries_unwrap_and_validate(self):
         with mock.patch.object(m, "ha_request", return_value=[{"entry_id": "e1", "title": "A"}, {"entry_id": "e2", "title": "B"}]):

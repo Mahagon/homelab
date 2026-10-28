@@ -194,17 +194,19 @@ data:
         raw = env.get(name, "").strip().lower()
         if not raw:
             return default
-        return raw not in {"0", "false", "no"}
+        return raw not in {"0", "false", "no", "off"}
 
 
     @dataclasses.dataclass(frozen=True)
     class Config:
-        cloudflare_token: str
+        # Credentials and the allowlist (home addresses) are kept out of repr so a
+        # traceback or debug print cannot leak them.
+        cloudflare_token: str = dataclasses.field(repr=False)
         account_id: str
         zone_id: str
         list_id: str
-        abuseipdb_key: str = ""
-        allowlist: tuple[IPNetwork, ...] = ()
+        abuseipdb_key: str = dataclasses.field(default="", repr=False)
+        allowlist: tuple[IPNetwork, ...] = dataclasses.field(default=(), repr=False)
         detect_own_addresses: bool = True
         recon_rule_ref: str = "home_assistant_reconnaissance_paths"
         ban_hours: int = 24
@@ -664,6 +666,9 @@ data:
         if abuseipdb is None:
             raise SyncError("ABUSEIPDB_API_KEY is required for abuseipdb mode")
         entries = abuseipdb.blacklist()
+        if not entries:
+            # Planning against an empty blacklist would delete every mirrored entry.
+            raise SyncError("AbuseIPDB returned an empty blacklist; no bans were changed")
         items = cloudflare.list_items()
         plan = plan_import(items, entries, now, config)
         cloudflare.write(plan)

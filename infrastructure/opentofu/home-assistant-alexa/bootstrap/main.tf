@@ -1,7 +1,13 @@
 data "aws_caller_identity" "current" {}
 
+# The state bucket name derives from this suffix; replacing it would orphan the
+# existing state bucket, so it is protected like the bucket itself.
 resource "random_id" "state_bucket" {
   byte_length = 4
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 locals {
@@ -110,6 +116,28 @@ data "aws_iam_policy_document" "state_bucket" {
       test     = "Bool"
       variable = "aws:SecureTransport"
       values   = ["false"]
+    }
+  }
+
+  statement {
+    sid    = "DenyOutdatedTLS"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions = ["s3:*"]
+    resources = [
+      aws_s3_bucket.state.arn,
+      "${aws_s3_bucket.state.arn}/*"
+    ]
+
+    condition {
+      test     = "NumericLessThan"
+      variable = "s3:TlsVersion"
+      values   = ["1.2"]
     }
   }
 }

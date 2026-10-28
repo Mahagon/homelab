@@ -8,6 +8,8 @@ metadata:
     secret-generator.v1.mittwald.de/encoding: "base64url"
     secret-generator.v1.mittwald.de/length: "32"
     helm.sh/resource-policy: keep
+    # Never prune or cascade-delete: a regenerated value breaks existing data.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 type: Opaque
 ---
 # Daily: SSD PVCs + PostgreSQL dump
@@ -71,6 +73,14 @@ spec:
                   export RESTIC_PASSWORD="$RESTIC_PASSWORD"
                   export GOMAXPROCS=2
 
+                  # Refuse to run unless /backup is the root of a mounted filesystem (the USB
+                  # drive). Unmounted, the hostPath is a plain directory on the /var SSD
+                  # partition and restic would silently fill the root disk.
+                  if [ "$(awk '$5 == "/backup" { print $4 }' /proc/self/mountinfo)" != "/" ]; then
+                    echo "==> Backup drive is not mounted at /var/mnt/backup; aborting." >&2
+                    exit 1
+                  fi
+
                   # Shared lock with the other backup CronJob (same node, same hostPath);
                   # skip this run if a backup is still in progress. Released when the pod exits.
                   # Kept inside the repo dir: the mount root itself is not writable by the container.
@@ -82,7 +92,7 @@ spec:
                   fi
 
                   # Initialise repo on first run
-                  if ! restic snapshots &>/dev/null; then
+                  if ! restic snapshots >/dev/null 2>&1; then
                     echo "==> Initialising restic repository..."
                     restic init
                   fi
@@ -93,7 +103,17 @@ spec:
                   echo "==> Backing up PostgreSQL dump..."
                   restic backup /pgdump --tag postgresql --host homelab
 
-                  echo "==> Pruning old SSD/PostgreSQL snapshots..."
+                  # Paperless documents live on the HDD, but their database rows are in the
+                  # daily dump; back them up daily too so a restore stays consistent.
+                  paperless_media_found=false
+                  for dir in /data/hdd/pvc-*_paperless_paperless-media; do
+                    [ -d "$dir" ] || continue
+                    paperless_media_found=true
+                    echo "==> Backing up Paperless media..."
+                    restic backup "$dir" --tag paperless-media --host homelab
+                  done
+
+                  echo "==> Pruning old SSD/PostgreSQL/Paperless media snapshots..."
                   restic unlock
                   restic forget \
                     --group-by paths,tags \
@@ -109,9 +129,21 @@ spec:
                     --keep-weekly 4 \
                     --keep-monthly 6 \
                     --prune
+                  restic forget \
+                    --group-by paths,tags \
+                    --tag paperless-media \
+                    --keep-daily 7 \
+                    --keep-weekly 4 \
+                    --keep-monthly 6 \
+                    --prune
 
                   echo "==> Daily backup complete."
                   restic snapshots
+
+                  if [ "$paperless_media_found" != true ]; then
+                    echo "==> Paperless media volume not found under /data/hdd; it was not backed up." >&2
+                    exit 1
+                  fi
               env:
                 - name: RESTIC_PASSWORD
                   valueFrom:
@@ -134,6 +166,9 @@ spec:
                 - name: pvc-ssd
                   mountPath: /data/ssd
                   readOnly: true
+                - name: pvc-hdd
+                  mountPath: /data/hdd
+                  readOnly: true
                 - name: pgdump
                   mountPath: /pgdump
                   readOnly: true
@@ -145,6 +180,10 @@ spec:
             - name: pvc-ssd
               hostPath:
                 path: /var/lib/homelab
+                type: Directory
+            - name: pvc-hdd
+              hostPath:
+                path: /var/mnt/data
                 type: Directory
             - name: pgdump
               emptyDir: {}
@@ -183,6 +222,14 @@ spec:
                   export RESTIC_PASSWORD="$RESTIC_PASSWORD"
                   export GOMAXPROCS=2
 
+                  # Refuse to run unless /backup is the root of a mounted filesystem (the USB
+                  # drive). Unmounted, the hostPath is a plain directory on the /var SSD
+                  # partition and restic would silently fill the root disk.
+                  if [ "$(awk '$5 == "/backup" { print $4 }' /proc/self/mountinfo)" != "/" ]; then
+                    echo "==> Backup drive is not mounted at /var/mnt/backup; aborting." >&2
+                    exit 1
+                  fi
+
                   # Shared lock with the other backup CronJob (same node, same hostPath);
                   # skip this run if a backup is still in progress. Released when the pod exits.
                   # Kept inside the repo dir: the mount root itself is not writable by the container.
@@ -194,9 +241,16 @@ spec:
                   fi
 
                   # Initialise repo on first run
-                  if ! restic snapshots &>/dev/null; then
+                  if ! restic snapshots >/dev/null 2>&1; then
                     echo "==> Initialising restic repository..."
                     restic init
+                  fi
+
+                  # Same check for the data HDD: an unmounted /var/mnt/data would yield
+                  # empty snapshots that push real ones out of the weekly retention.
+                  if [ "$(awk '$5 == "/data/hdd" { print $4 }' /proc/self/mountinfo)" != "/" ]; then
+                    echo "==> Data HDD is not mounted at /var/mnt/data; aborting." >&2
+                    exit 1
                   fi
 
                   echo "==> Backing up HDD PVCs (media volumes)..."
