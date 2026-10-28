@@ -293,14 +293,16 @@ kubectl get pods --namespace cloudflared
 Both replicas must be Ready. In Cloudflare, the `home-assistant-k3s` tunnel must
 show Healthy before changing DNS.
 
-The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, Home Assistant
-TCP 8123, Vaultwarden TCP 8080, Jellyfin TCP 8096, and Grist TCP 8484. If the Home Assistant node address changes, update the `/32` rule in
+The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, HTTPS to
+Cloudflare's published proxy ranges (for the Access signing keys at
+`<team>.cloudflareaccess.com`, used to verify Grist's Access JWT), Home
+Assistant TCP 8123, Vaultwarden TCP 8080, Jellyfin TCP 8096, and Grist TCP 8484. If the Home Assistant node address changes, update the `/32` rule in
 `k8s/apps/cloudflared/manifests/networkpolicy.yaml` before moving the node.
 
 The UniFi gateway must not have a WAN port-forward or DMZ rule for Home
 Assistant. The connector is outbound-only; no inbound firewall exception is
 required. If UniFi egress rules are restricted, allow the K3s node to reach
-Cloudflare on TCP/UDP 7844. Cloudflare edge IPs are intentionally not pinned
+Cloudflare on TCP/UDP 7844 and HTTPS 443. Cloudflare edge IPs are intentionally not pinned
 because they change over time.
 
 ## 7. Move the existing DNS record under OpenTofu
