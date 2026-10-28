@@ -435,8 +435,16 @@ jobs:
           exit-code: "1"
           hide-progress: true
 
+      # A registry outage or pull rate limit leaves no report. Warn instead of
+      # failing, so an unreachable registry cannot block the production apply.
+      - name: Warn when the image could not be scanned
+        if: always() && hashFiles('trivy-results.sarif') == ''
+        env:
+          IMAGE: ${{ matrix.target.image }}
+        run: echo "::warning::${IMAGE} was not scanned (no Trivy report); rerun this job once the registry is reachable."
+
       - name: Publish findings to GitHub Code Scanning
-        if: always()
+        if: always() && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           sarif_file: trivy-results.sarif
