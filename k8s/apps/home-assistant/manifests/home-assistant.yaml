@@ -258,6 +258,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: home-assistant-config
   namespace: home-assistant
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: local-path-ssd

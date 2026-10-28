@@ -189,7 +189,7 @@ Daily incremental backups via restic at 01:00 (before the Zincati update window 
 
 [![Backup data flow](docs/diagrams/backup.svg)](docs/diagrams/backup.mmd)
 
-**Retention policy:** SSD volumes and PostgreSQL dump: 7 daily · 4 weekly ·
+**Retention policy:** SSD volumes, PostgreSQL dump, and Paperless media: 7 daily · 4 weekly ·
 6 monthly snapshots per tag. HDD volumes: 8 weekly snapshots.
 
 > **Escrow the restic password off the cluster.** It is generated in-cluster by
