@@ -18,6 +18,8 @@ resource "cloudflare_notification_policy" "tunnel_health" {
   }
 }
 
+# The non-Enterprise HTTP DDoS alert accepts no filters (zone and hostname
+# filters belong to the Advanced variant), so it covers every zone in the account.
 resource "cloudflare_notification_policy" "http_ddos" {
   account_id  = var.cloudflare_account_id
   name        = "Homelab HTTP DDoS attack"
@@ -25,25 +27,19 @@ resource "cloudflare_notification_policy" "http_ddos" {
   alert_type  = "dos_attack_l7"
   enabled     = true
 
-  filters = {
-    zones = [var.cloudflare_zone_id]
-  }
-
   mechanisms = {
     email = [{ id = var.budget_email }]
   }
 }
 
+# Universal SSL alerts accept no filters either (the API rejects a zones filter
+# with error 17007), so this also covers every zone in the account.
 resource "cloudflare_notification_policy" "universal_ssl" {
   account_id  = var.cloudflare_account_id
   name        = "Homelab Universal SSL"
   description = "Universal SSL certificate validation, issuance, renewal, or expiry problems."
   alert_type  = "universal_ssl_event_type"
   enabled     = true
-
-  filters = {
-    zones = [var.cloudflare_zone_id]
-  }
 
   mechanisms = {
     email = [{ id = var.budget_email }]
