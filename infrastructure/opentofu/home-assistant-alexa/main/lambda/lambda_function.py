@@ -6,10 +6,10 @@ incoming directive because it contains the Home Assistant OAuth access token.
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
-import socket
 import ssl
 import time
 import urllib.error
@@ -19,7 +19,7 @@ from typing import Any
 
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(os.environ.get("LOG_LEVEL", "INFO").upper())
+LOGGER.setLevel(getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO))
 
 BASE_URL = os.environ.get("BASE_URL", "").rstrip("/")
 if not BASE_URL.startswith("https://"):
@@ -31,6 +31,19 @@ MAX_PAYLOAD_BYTES = 1024 * 1024
 
 TLS_CONTEXT = ssl.create_default_context()
 TLS_CONTEXT.minimum_version = ssl.TLSVersion.TLSv1_2
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Surface redirects as HTTPError so the bearer token never follows them."""
+
+    def redirect_request(self, *_args: Any, **_kwargs: Any) -> None:
+        return None
+
+
+_OPENER = urllib.request.build_opener(
+    _NoRedirectHandler,
+    urllib.request.HTTPSHandler(context=TLS_CONTEXT),
+)
 
 
 def _directive(event: Any) -> dict[str, Any]:
@@ -150,11 +163,7 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
     )
 
     try:
-        with urllib.request.urlopen(
-            request,
-            timeout=ORIGIN_TIMEOUT_SECONDS,
-            context=TLS_CONTEXT,
-        ) as origin_response:
+        with _OPENER.open(request, timeout=ORIGIN_TIMEOUT_SECONDS) as origin_response:
             payload = origin_response.read(MAX_PAYLOAD_BYTES + 1)
             status = origin_response.status
         if len(payload) > MAX_PAYLOAD_BYTES:
@@ -179,7 +188,7 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
                 "Home Assistant rejected the authorization credential.",
             )
         return _error_response(event, "ENDPOINT_UNREACHABLE", "Home Assistant rejected the request.")
-    except (urllib.error.URLError, TimeoutError, socket.timeout):
+    except (urllib.error.URLError, OSError, http.client.HTTPException):
         LOGGER.warning(
             "Home Assistant is unreachable",
             extra={"request_id": request_id, "namespace": namespace, "directive_name": name},
