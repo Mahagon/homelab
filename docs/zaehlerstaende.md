@@ -26,6 +26,13 @@ built in this repository.
 - **No egress.** Formulas run in gVisor without a network. The namespace
   denies all egress, so a compromised pod reaches neither the LAN, the
   cluster, nor the internet.
+- **gVisor without a checkpoint.** The Deployment replaces the image's
+  `sandbox/run.sh` so that it skips the gVisor engine checkpoint. Restoring
+  that checkpoint needs the XSAVE CPU feature, which the node's Celeron J1900
+  lacks; with it, every document failed to open with `incompatible
+  FeatureSet`. Plain gVisor works, and each document's sandbox just takes a
+  little longer to start. Recheck the override against `run.sh` on Grist
+  upgrades.
 - **Restricted Pod Security.** The pod runs as non-root with a read-only root
   filesystem and no capabilities. Its only exceptions are a `/persist` PVC and
   a `/tmp` emptyDir.
