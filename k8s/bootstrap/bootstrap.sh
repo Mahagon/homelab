@@ -28,15 +28,23 @@ if [[ -z "${KUBE_CONTEXT:-}" ]]; then
   KUBE_CONTEXT="default"
 fi
 
-kubectl config use-context "$KUBE_CONTEXT" &>/dev/null || {
+kubectl config get-contexts "$KUBE_CONTEXT" &>/dev/null || {
   echo "Error: kube context '$KUBE_CONTEXT' not found. Available contexts:"
   kubectl config get-contexts -o name
   exit 1
 }
 
+# Pin every call to the selected context without changing the user's current one.
+kubectl() { command kubectl --context "$KUBE_CONTEXT" "$@"; }
+helm() { command helm --kube-context "$KUBE_CONTEXT" "$@"; }
+
+# Print a JSON document built from environment variables, so secret values are
+# escaped correctly and never appear in a process's argument list.
+json_from_env() { python3 -c "$1"; }
+
 # Try to read DOMAIN/EMAIL from an existing cluster secret before prompting
 if [[ -z "${DOMAIN:-}" ]] || [[ -z "${EMAIL:-}" ]]; then
-  if kubectl get secret homelab-config --namespace argocd &>/dev/null 2>&1; then
+  if kubectl get secret homelab-config --namespace argocd &>/dev/null; then
     DOMAIN="${DOMAIN:-$(kubectl get secret homelab-config --namespace argocd -o jsonpath='{.data.domain}' | base64 -d)}"
     EMAIL="${EMAIL:-$(kubectl get secret homelab-config --namespace argocd -o jsonpath='{.data.email}' | base64 -d)}"
   fi
@@ -48,7 +56,25 @@ if [[ -z "${EMAIL:-}" ]]; then
   read -rp "ACME email (e.g. you@example.com): " EMAIL
 fi
 
+if [[ ! "$DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+  echo "Error: DOMAIN must be a plain hostname, got '$DOMAIN'" >&2
+  exit 1
+fi
+if [[ ! "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]]; then
+  echo "Error: EMAIL must be a plain address, got '$EMAIL'" >&2
+  exit 1
+fi
+
 SSH_KEY_FILE="${SSH_KEY_FILE:-${HOME}/.ssh/id_ed25519_argocd}"
+
+# Install the same chart version Argo CD later manages itself, avoiding an
+# upgrade or downgrade on its first self-sync.
+ARGOCD_CHART_VERSION="$(awk '/chart: argo-cd/ { found = 1 } found && /targetRevision:/ { print $2; exit }' \
+  "$SCRIPT_DIR/../apps/argocd/application.yaml")"
+if [[ -z "$ARGOCD_CHART_VERSION" ]]; then
+  echo "Error: could not read the argo-cd chart version from k8s/apps/argocd/application.yaml" >&2
+  exit 1
+fi
 
 # ---- Bootstrap ----
 
@@ -57,7 +83,7 @@ kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace cert-manager --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace external-dns --dry-run=client -o yaml | kubectl apply -f -
 
-if kubectl get secret homelab-config --namespace argocd &>/dev/null 2>&1; then
+if kubectl get secret homelab-config --namespace argocd &>/dev/null; then
   echo "==> homelab-config secret already exists, skipping."
 else
   echo "==> Storing domain config in cluster (never written to git)..."
@@ -78,6 +104,7 @@ helm repo update
 ARGOCD_VALUES=$(sed "s|\${DOMAIN}|${DOMAIN}|g; s|\${EMAIL}|${EMAIL}|g" "$SCRIPT_DIR/argocd-values.yaml")
 
 helm upgrade --install argocd argo/argo-cd \
+  --version "$ARGOCD_CHART_VERSION" \
   --namespace argocd \
   --values <(echo "$ARGOCD_VALUES") \
   --set "global.domain=argocd.${DOMAIN}" \
@@ -97,8 +124,8 @@ kubectl label secret argocd-repo-homelab \
 
 _cf_external_dns_exists=false
 _cf_cert_manager_exists=false
-kubectl get secret cloudflare-api-token --namespace external-dns &>/dev/null 2>&1 && _cf_external_dns_exists=true
-kubectl get secret cloudflare-api-token --namespace cert-manager &>/dev/null 2>&1 && _cf_cert_manager_exists=true
+kubectl get secret cloudflare-api-token --namespace external-dns &>/dev/null && _cf_external_dns_exists=true
+kubectl get secret cloudflare-api-token --namespace cert-manager &>/dev/null && _cf_cert_manager_exists=true
 
 if [[ "$_cf_external_dns_exists" == "true" && "$_cf_cert_manager_exists" == "true" ]]; then
   echo "==> cloudflare-api-token secrets already exist, skipping."
@@ -113,20 +140,20 @@ else
   if [[ "$_cf_external_dns_exists" == "false" ]]; then
     kubectl create secret generic cloudflare-api-token \
       --namespace external-dns \
-      --from-literal=api-token="$CF_TOKEN" \
+      --from-file=api-token=<(printf '%s' "$CF_TOKEN") \
       --dry-run=client -o yaml | kubectl apply -f -
   fi
 
   if [[ "$_cf_cert_manager_exists" == "false" ]]; then
     kubectl create secret generic cloudflare-api-token \
       --namespace cert-manager \
-      --from-literal=api-token="$CF_TOKEN" \
+      --from-file=api-token=<(printf '%s' "$CF_TOKEN") \
       --dry-run=client -o yaml | kubectl apply -f -
   fi
 fi
 
 _argocd_oauth_exists=false
-if kubectl get secret argocd-secret --namespace argocd &>/dev/null 2>&1; then
+if kubectl get secret argocd-secret --namespace argocd &>/dev/null; then
   _existing_client_id="$(kubectl get secret argocd-secret --namespace argocd -o jsonpath='{.data.dex\.github\.clientID}' 2>/dev/null)"
   [[ -n "$_existing_client_id" ]] && _argocd_oauth_exists=true
 fi
@@ -144,15 +171,20 @@ else
   read -rsp "  GitHub OAuth Client Secret: " ARGOCD_GH_CLIENT_SECRET
   echo ""
 
-  kubectl patch secret argocd-secret \
-    --namespace argocd \
-    --type merge \
-    -p "{\"stringData\":{\"dex.github.clientID\":\"${ARGOCD_GH_CLIENT_ID}\",\"dex.github.clientSecret\":\"${ARGOCD_GH_CLIENT_SECRET}\"}}"
+  export ARGOCD_GH_CLIENT_ID ARGOCD_GH_CLIENT_SECRET
+  json_from_env 'import json, os; print(json.dumps({"stringData": {
+      "dex.github.clientID": os.environ["ARGOCD_GH_CLIENT_ID"],
+      "dex.github.clientSecret": os.environ["ARGOCD_GH_CLIENT_SECRET"]}}))' |
+    kubectl patch secret argocd-secret \
+      --namespace argocd \
+      --type merge \
+      --patch-file /dev/stdin
+  unset ARGOCD_GH_CLIENT_SECRET
 fi
 
 kubectl create namespace paperless --dry-run=client -o yaml | kubectl apply -f -
 
-if kubectl get secret paperless-github-oauth --namespace paperless &>/dev/null 2>&1; then
+if kubectl get secret paperless-github-oauth --namespace paperless &>/dev/null; then
   echo "==> paperless-github-oauth secret already exists, skipping."
 else
   echo "==> Configuring GitHub OAuth for Paperless-ngx..."
@@ -165,15 +197,19 @@ else
   read -rsp "  GitHub OAuth Client Secret: " PAPERLESS_GH_CLIENT_SECRET
   echo ""
 
+  export PAPERLESS_GH_CLIENT_ID PAPERLESS_GH_CLIENT_SECRET
   kubectl create secret generic paperless-github-oauth \
     --namespace paperless \
-    --from-literal=providers-json="{\"github\": {\"APP\": {\"client_id\": \"${PAPERLESS_GH_CLIENT_ID}\", \"secret\": \"${PAPERLESS_GH_CLIENT_SECRET}\", \"key\": \"\"}}}" \
+    --from-file=providers-json=<(json_from_env 'import json, os; print(json.dumps({"github": {"APP": {
+      "client_id": os.environ["PAPERLESS_GH_CLIENT_ID"],
+      "secret": os.environ["PAPERLESS_GH_CLIENT_SECRET"], "key": ""}}}))') \
     --dry-run=client -o yaml | kubectl apply -f -
+  unset PAPERLESS_GH_CLIENT_SECRET
 fi
 
 kubectl create namespace grafana-alloy --dry-run=client -o yaml | kubectl apply -f -
 
-if kubectl get secret grafana-cloud-credentials --namespace grafana-alloy &>/dev/null 2>&1; then
+if kubectl get secret grafana-cloud-credentials --namespace grafana-alloy &>/dev/null; then
   _gc_otlp_url="$(kubectl get secret grafana-cloud-credentials --namespace grafana-alloy -o jsonpath='{.data.OTLP_URL}' 2>/dev/null)"
   _gc_otlp_username="$(kubectl get secret grafana-cloud-credentials --namespace grafana-alloy -o jsonpath='{.data.OTLP_USERNAME}' 2>/dev/null)"
 
@@ -193,7 +229,7 @@ if kubectl get secret grafana-cloud-credentials --namespace grafana-alloy &>/dev
     kubectl patch secret grafana-cloud-credentials \
       --namespace grafana-alloy \
       --type merge \
-      -p "{\"data\":{\"OTLP_URL\":\"${_gc_otlp_url_b64}\",\"OTLP_USERNAME\":\"${_gc_otlp_username_b64}\"}}"
+      --patch-file <(printf '{"data":{"OTLP_URL":"%s","OTLP_USERNAME":"%s"}}' "$_gc_otlp_url_b64" "$_gc_otlp_username_b64")
   fi
 else
   echo "==> Configuring Grafana Cloud credentials..."
@@ -201,7 +237,8 @@ else
   echo "Find these at https://grafana.com -> your stack -> Details"
   echo "The API token must include metrics:write, logs:write, and traces:write scopes."
   echo ""
-  read -rp "  Grafana Cloud API token (glc_...): " GC_API_KEY
+  read -rsp "  Grafana Cloud API token (glc_...): " GC_API_KEY
+  echo ""
   read -rp "  Prometheus remote write URL: " GC_METRICS_URL
   read -rp "  Prometheus username (instance ID): " GC_METRICS_USERNAME
   read -rp "  Loki push URL: " GC_LOGS_URL
@@ -211,7 +248,7 @@ else
 
   kubectl create secret generic grafana-cloud-credentials \
     --namespace grafana-alloy \
-    --from-literal=API_KEY="$GC_API_KEY" \
+    --from-file=API_KEY=<(printf '%s' "$GC_API_KEY") \
     --from-literal=METRICS_URL="$GC_METRICS_URL" \
     --from-literal=METRICS_USERNAME="$GC_METRICS_USERNAME" \
     --from-literal=LOGS_URL="$GC_LOGS_URL" \
