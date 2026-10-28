@@ -40,7 +40,7 @@
       "groupName": "OpenTofu providers"
     },
     {
-      "description": "Automerge tested non-major dependency updates",
+      "description": "Automerge tested non-major dependency updates once they are three days old, so a compromised upstream release can be yanked before Argo CD deploys it",
       "matchUpdateTypes": [
         "minor",
         "patch",
@@ -49,7 +49,9 @@
         "digest",
         "lockFileMaintenance"
       ],
-      "automerge": true
+      "automerge": true,
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     }
   ],
   "customManagers": [
