@@ -114,8 +114,8 @@ ssh core@<your-server-ip>
 # K3s is auto-installed via Ignition - verify:
 sudo systemctl status k3s
 
-# From your workstation, copy the kubeconfig:
-scp core@<server-ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/config
+# From your workstation, copy the kubeconfig (root-only on the node):
+(umask 077 && ssh core@<server-ip> sudo cat /etc/rancher/k3s/k3s.yaml > ~/.kube/config)
 # Fix the server address in the kubeconfig
 
 # Bootstrap ArgoCD + secrets.

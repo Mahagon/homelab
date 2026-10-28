@@ -104,7 +104,8 @@ storage:
       contents:
         inline: |
           # K3s server configuration
-          write-kubeconfig-mode: "0644"
+          # Admin kubeconfig is root-only; copy it with sudo (see README).
+          write-kubeconfig-mode: "0600"
           tls-san:
             - "homelab"
             - "homelab.local"
@@ -117,6 +118,35 @@ storage:
           # NetworkPolicy enforcement is required by the cloudflared namespace.
           # Existing namespaces remain unaffected until they define policies.
           disable-network-policy: false
+
+    # SSH: keys only, no root login. Sorted before Fedora's defaults so these win
+    # (sshd uses the first value it reads for each keyword).
+    - path: /etc/ssh/sshd_config.d/10-homelab-hardening.conf
+      mode: 0644
+      contents:
+        inline: |
+          PermitRootLogin no
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          X11Forwarding no
+          MaxAuthTries 3
+
+    # Kernel and network hardening that does not interfere with the K3s CNI
+    # (reverse-path filtering is left at the distribution default).
+    - path: /etc/sysctl.d/90-hardening.conf
+      mode: 0644
+      contents:
+        inline: |
+          kernel.kptr_restrict = 2
+          kernel.dmesg_restrict = 1
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv4.conf.default.accept_redirects = 0
+          net.ipv6.conf.all.accept_redirects = 0
+          net.ipv6.conf.default.accept_redirects = 0
+          net.ipv4.conf.all.send_redirects = 0
+          net.ipv4.conf.default.send_redirects = 0
+          net.ipv4.conf.all.accept_source_route = 0
+          net.ipv6.conf.all.accept_source_route = 0
 
     # Cap journald RAM and disk usage
     - path: /etc/systemd/journald.conf.d/00-limit.conf
@@ -310,7 +340,9 @@ systemd:
         Description=Weekly K3s patch update check
 
         [Timer]
-        OnCalendar=Sun *-*-* 04:00:00
+        # After the Zincati reboot window (Sun 03:00-05:00) so a K3s upgrade
+        # never races an OS update reboot.
+        OnCalendar=Sun *-*-* 06:00:00
         RandomizedDelaySec=30min
         Persistent=true
 
