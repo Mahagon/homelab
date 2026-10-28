@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grist-data
+  namespace: grist
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-ssd
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grist
+  namespace: grist
+  labels:
+    app: grist
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grist
+  template:
+    metadata:
+      labels:
+        app: grist
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The image's grist user; starting as it skips the root entrypoint's chown/setpriv.
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: grist
+          image: gristlabs/grist-oss:1.7.21@sha256:5657dc14b1745ef759bf789e5206ff4591e9b7d61d53777cc2fc710bfc9fbe36
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - containerPort: 8484
+              name: http
+          env:
+            - name: APP_HOME_URL
+              value: "https://zaehlerstaende.${DOMAIN}"
+            - name: GRIST_SINGLE_ORG
+              value: "nachbarn"
+            # Identity comes only from Cloudflare Access: cloudflared rejects requests
+            # without a valid Access JWT, and only cloudflared may reach this pod. Never
+            # add a Traefik Ingress: LAN clients could then forge this header.
+            - name: GRIST_FORWARD_AUTH_HEADER
+              value: "Cf-Access-Authenticated-User-Email"
+            - name: GRIST_FORWARD_AUTH_LOGOUT_PATH
+              value: "/cdn-cgi/access/logout"
+            - name: GRIST_IGNORE_SESSION
+              value: "true"
+            - name: GRIST_FORCE_LOGIN
+              value: "true"
+            - name: GRIST_ANON_PLAYGROUND
+              value: "false"
+            # Skip the first-run /boot wizard; the admin is the owner's Access email.
+            - name: GRIST_IN_SERVICE
+              value: "true"
+            - name: GRIST_ADMIN_EMAIL
+              value: "${EMAIL}"
+            # Formulas run in gVisor; this works unprivileged under the restricted profile.
+            - name: GRIST_SANDBOX_FLAVOR
+              value: "gvisor"
+            - name: GRIST_TELEMETRY_LEVEL
+              value: "off"
+            - name: GRIST_HIDE_UI_ELEMENTS
+              value: "helpCenter,billing,templates,createSite,multiSite,multiAccounts,supportGrist"
+            - name: GRIST_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: grist-credentials
+                  key: GRIST_SESSION_SECRET
+            - name: GRIST_BOOT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grist-credentials
+                  key: GRIST_BOOT_KEY
+            - name: HOME
+              value: "/tmp"
+          volumeMounts:
+            - name: data
+              mountPath: /persist
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /status
+              port: 8484
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8484
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8484
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grist-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi
+---
+# No Ingress and no external-dns annotation: zaehlerstaende.${DOMAIN} is an
+# OpenTofu-managed tunnel CNAME behind Cloudflare Access.
+apiVersion: v1
+kind: Service
+metadata:
+  name: grist
+  namespace: grist
+spec:
+  selector:
+    app: grist
+  ports:
+    - port: 80
+      targetPort: 8484
+      name: http
+  type: ClusterIP

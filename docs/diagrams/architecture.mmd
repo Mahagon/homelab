@@ -18,6 +18,7 @@ flowchart TD
     AppServices --> HomeAssistant["Home Assistant"]
     AppServices --> Vaultwarden["Vaultwarden"]
     AppServices --> Jellyfin["Jellyfin"]
+    AppServices --> Grist["Grist"]
 
     Traefik --> AppServices
     ArgoCD -->|reconciles| AppServices
@@ -26,6 +27,7 @@ flowchart TD
     Cloudflared -->|internal HTTP 8123| HomeAssistant
     Cloudflared -->|internal HTTP 8080| Vaultwarden
     Cloudflared -->|internal HTTP 8096| Jellyfin
+    Cloudflared -->|internal HTTP 8484, Access JWT required| Grist
 
     SSD["SSD 256 GB - OS, K3s state, fast PVs"]
     HDD["HDD 4 TB - media, documents"]

@@ -55,7 +55,7 @@
   <text class="small" x="525" y="372">Autoscaler</text>
   <rect class="accent" x="685" y="320" width="245" height="78" rx="12"/>
   <text class="label" x="807" y="350">Application services</text>
-  <text class="small" x="807" y="374">Home Assistant, Vaultwarden, Jellyfin</text>
+  <text class="small" x="807" y="374">HA, Vaultwarden, Jellyfin, Grist</text>
 
   <rect class="storage" x="125" y="445" width="250" height="58" rx="10"/>
   <text class="label" x="250" y="468">SSD 256 GB</text>
@@ -83,7 +83,7 @@
   <text class="edge" x="425" y="293">reconciles</text>
   <path class="line" d="M392 263 V305 H750 V320"/>
   <path class="line" d="M1050 263 V290 H900 V320"/>
-  <text class="edge" x="1000" y="284">HTTP 8123 / 8080 / 8096</text>
+  <text class="edge" x="1000" y="284">HTTP 8123 / 8080 / 8096 / 8484</text>
   <path class="line" d="M370 359 H685"/>
   <path class="line" d="M620 359 H685"/>
   <path class="line" d="M760 398 L300 445"/>
