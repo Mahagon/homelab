@@ -34,16 +34,14 @@ resource "cloudflare_notification_policy" "http_ddos" {
   }
 }
 
+# Universal SSL alerts accept no filters (the API rejects a zones filter with
+# error 17007), so this covers every zone in the account.
 resource "cloudflare_notification_policy" "universal_ssl" {
   account_id  = var.cloudflare_account_id
   name        = "Homelab Universal SSL"
   description = "Universal SSL certificate validation, issuance, renewal, or expiry problems."
   alert_type  = "universal_ssl_event_type"
   enabled     = true
-
-  filters = {
-    zones = [var.cloudflare_zone_id]
-  }
 
   mechanisms = {
     email = [{ id = var.budget_email }]

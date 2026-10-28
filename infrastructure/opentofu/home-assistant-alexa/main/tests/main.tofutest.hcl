@@ -232,8 +232,8 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = cloudflare_notification_policy.tunnel_health.alert_type == "tunnel_health_event" && cloudflare_notification_policy.tunnel_health.filters.tunnel_id == tolist(["11111111-2222-3333-4444-555555555555"]) && cloudflare_notification_policy.http_ddos.filters.zones == tolist([var.cloudflare_zone_id]) && cloudflare_notification_policy.universal_ssl.filters.zones == tolist([var.cloudflare_zone_id])
-    error_message = "Notifications must be scoped to the homelab tunnel and zone."
+    condition     = cloudflare_notification_policy.tunnel_health.alert_type == "tunnel_health_event" && cloudflare_notification_policy.tunnel_health.filters.tunnel_id == tolist(["11111111-2222-3333-4444-555555555555"]) && cloudflare_notification_policy.http_ddos.filters.zones == tolist([var.cloudflare_zone_id]) && cloudflare_notification_policy.universal_ssl.alert_type == "universal_ssl_event_type" && cloudflare_notification_policy.universal_ssl.filters == null
+    error_message = "Notifications must be scoped to the homelab tunnel and zone; Universal SSL alerts accept no filters."
   }
 
 }
