@@ -334,6 +334,11 @@ run "skill_and_dns_are_restricted" {
     condition     = cloudflare_dns_record.zaehlerstaende[0].proxied && cloudflare_dns_record.zaehlerstaende[0].type == "CNAME" && cloudflare_dns_record.zaehlerstaende[0].name == "zaehlerstaende"
     error_message = "Grist DNS must be a proxied CNAME."
   }
+
+  assert {
+    condition     = alltrue([for record in concat(cloudflare_dns_record.home_assistant, cloudflare_dns_record.vaultwarden, cloudflare_dns_record.jellyfin, cloudflare_dns_record.zaehlerstaende) : length(record.comment) <= 100])
+    error_message = "Cloudflare rejects DNS record comments longer than 100 characters."
+  }
 }
 
 run "reject_wrong_region" {

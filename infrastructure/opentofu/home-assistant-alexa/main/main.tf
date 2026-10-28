@@ -263,7 +263,7 @@ resource "cloudflare_dns_record" "zaehlerstaende" {
   type    = "CNAME"
   proxied = true
   ttl     = 1
-  comment = "Grist meter readings behind Cloudflare Access via the home-assistant-k3s Cloudflare Tunnel; managed by OpenTofu."
+  comment = "Grist (Cloudflare Access) via the home-assistant-k3s Cloudflare Tunnel; managed by OpenTofu."
 }
 
 check "tunnel_origin_contract" {
