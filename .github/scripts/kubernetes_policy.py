@@ -22,6 +22,9 @@ WORKLOAD_KINDS = {
     "Job",
     "CronJob",
 }
+HOST_NAMESPACE_FIELDS = ("hostNetwork", "hostPID", "hostIPC")
+# Pod Security "restricted" permits adding only NET_BIND_SERVICE.
+ALLOWED_ADDED_CAPABILITIES = {"NET_BIND_SERVICE"}
 
 
 def as_mapping(value: object) -> YamlMap:
@@ -36,6 +39,13 @@ def as_list(value: object) -> list[object]:
     if not isinstance(value, list):
         return []
     return cast(list[object], value)
+
+
+def effective(container_security: YamlMap, pod_security: YamlMap, key: str) -> object:
+    """Return a security setting, letting the container override the pod default."""
+    if key in container_security:
+        return container_security[key]
+    return pod_security.get(key)
 
 
 @dataclass(frozen=True, order=True)
@@ -120,11 +130,11 @@ def findings(paths: Iterable[pathlib.Path]) -> list[Finding]:
                     Finding(resource, "*", "automount-service-account-token", source)
                 )
 
-            pod_seccomp = (
-                as_mapping(pod_security.get("seccompProfile")).get("type")
-                == "RuntimeDefault"
-            )
-            pod_non_root = pod_security.get("runAsNonRoot") is True
+            if any(pod.get(field) is True for field in HOST_NAMESPACE_FIELDS):
+                result.append(Finding(resource, "*", "host-namespaces", source))
+            if any("hostPath" in as_mapping(volume) for volume in as_list(pod.get("volumes"))):
+                result.append(Finding(resource, "*", "host-path-volumes", source))
+
             for section in ("initContainers", "containers", "ephemeralContainers"):
                 for value in as_list(pod.get(section)):
                     container = as_mapping(value)
@@ -139,15 +149,15 @@ def findings(paths: Iterable[pathlib.Path]) -> list[Finding]:
                                 resource, name, "allow-privilege-escalation", source
                             )
                         )
-                    if (
-                        not pod_seccomp
-                        and as_mapping(security.get("seccompProfile")).get("type")
-                        != "RuntimeDefault"
-                    ):
+                    seccomp = as_mapping(effective(security, pod_security, "seccompProfile"))
+                    if seccomp.get("type") != "RuntimeDefault":
                         result.append(
                             Finding(resource, name, "seccomp-runtime-default", source)
                         )
-                    if not pod_non_root and security.get("runAsNonRoot") is not True:
+                    if (
+                        effective(security, pod_security, "runAsNonRoot") is not True
+                        or effective(security, pod_security, "runAsUser") == 0
+                    ):
                         result.append(
                             Finding(resource, name, "run-as-non-root", source)
                         )
@@ -164,6 +174,15 @@ def findings(paths: Iterable[pathlib.Path]) -> list[Finding]:
                     if "ALL" not in dropped:
                         result.append(
                             Finding(resource, name, "drop-all-capabilities", source)
+                        )
+                    added = {
+                        item
+                        for item in as_list(capabilities.get("add"))
+                        if isinstance(item, str)
+                    }
+                    if added - ALLOWED_ADDED_CAPABILITIES:
+                        result.append(
+                            Finding(resource, name, "added-capabilities", source)
                         )
     return sorted(result)
 
@@ -254,7 +273,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Validate owned Kubernetes workloads against the runtime policy."""
     args = parse_args()
-    paths = args.paths or sorted(pathlib.Path("k8s/apps").glob("*/manifests/*.yaml"))
+    paths = args.paths or sorted(
+        path
+        for path in pathlib.Path("k8s/apps").glob("*/manifests/**/*")
+        if path.suffix in {".yaml", ".yml"}
+    )
     try:
         errors = validate(paths, args.exceptions, args.today)
     except (OSError, ValueError, yaml.YAMLError) as error:
