@@ -198,13 +198,16 @@ else
   echo ""
 
   export PAPERLESS_GH_CLIENT_ID PAPERLESS_GH_CLIENT_SECRET
+  # Built in a variable first: set -e does not see failures inside <(...).
+  _providers_json="$(json_from_env 'import json, os; print(json.dumps({"github": {"APP": {
+      "client_id": os.environ["PAPERLESS_GH_CLIENT_ID"],
+      "secret": os.environ["PAPERLESS_GH_CLIENT_SECRET"], "key": ""}}}))')"
+  unset PAPERLESS_GH_CLIENT_SECRET
   kubectl create secret generic paperless-github-oauth \
     --namespace paperless \
-    --from-file=providers-json=<(json_from_env 'import json, os; print(json.dumps({"github": {"APP": {
-      "client_id": os.environ["PAPERLESS_GH_CLIENT_ID"],
-      "secret": os.environ["PAPERLESS_GH_CLIENT_SECRET"], "key": ""}}}))') \
+    --from-file=providers-json=<(printf '%s' "$_providers_json") \
     --dry-run=client -o yaml | kubectl apply -f -
-  unset PAPERLESS_GH_CLIENT_SECRET
+  unset _providers_json
 fi
 
 kubectl create namespace grafana-alloy --dry-run=client -o yaml | kubectl apply -f -

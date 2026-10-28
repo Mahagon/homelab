@@ -246,6 +246,13 @@ spec:
                     restic init
                   fi
 
+                  # Same check for the data HDD: an unmounted /var/mnt/data would yield
+                  # empty snapshots that push real ones out of the weekly retention.
+                  if [ "$(awk '$5 == "/data/hdd" { print $4 }' /proc/self/mountinfo)" != "/" ]; then
+                    echo "==> Data HDD is not mounted at /var/mnt/data; aborting." >&2
+                    exit 1
+                  fi
+
                   echo "==> Backing up HDD PVCs (media volumes)..."
                   restic backup /data/hdd --tag pvcs-hdd --host homelab
 

@@ -75,7 +75,7 @@ jobs:
             base="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow security-iac.yml \
               --branch main --event push --status success --limit 1 \
               --json headSha --jq '.[0].headSha // empty' 2>/dev/null || true)"
-            if [[ -z "${base}" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            if [[ -z "${base}" ]] || ! git merge-base --is-ancestor "${base}" "${GITHUB_SHA}" 2>/dev/null; then
               echo "::warning::No usable last successful run; diffing this push only."
               base="${BEFORE_SHA}"
             fi
