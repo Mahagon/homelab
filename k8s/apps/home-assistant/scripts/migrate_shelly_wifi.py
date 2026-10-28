@@ -46,9 +46,12 @@ DEFAULT_STATE_PATH = (
 )
 
 _UNSET: Any = object()
+# Shelly devices serve self-signed certificates; Home Assistant traffic carries an
+# administrator token and always uses the verified context.
 _INSECURE_TLS = ssl.create_default_context()
 _INSECURE_TLS.check_hostname = False
 _INSECURE_TLS.verify_mode = ssl.CERT_NONE
+_VERIFIED_TLS = ssl.create_default_context()
 
 
 class MigrationError(Exception):
@@ -214,6 +217,10 @@ _OPENER = urllib.request.build_opener(
     urllib.request.HTTPSHandler(context=_INSECURE_TLS),
     _NoRaiseHandler(),
 )
+_VERIFIED_OPENER = urllib.request.build_opener(
+    urllib.request.HTTPSHandler(context=_VERIFIED_TLS),
+    _NoRaiseHandler(),
+)
 
 
 @dataclasses.dataclass
@@ -238,10 +245,12 @@ def http_request(
     headers: dict[str, str] | None = None,
     body: bytes | None = None,
     timeout: float = 30,
+    verify_tls: bool = False,
 ) -> HttpResponse:
     request = urllib.request.Request(url, data=body, method=method, headers=headers or {})
+    opener = _VERIFIED_OPENER if verify_tls else _OPENER
     try:
-        with _OPENER.open(request, timeout=timeout) as response:
+        with opener.open(request, timeout=timeout) as response:
             return HttpResponse(response.status, response.headers, response.read(), response.geturl())
     except urllib.error.URLError as exc:
         raise MigrationError(f"{method} {url} failed: {exc.reason}") from exc
@@ -269,7 +278,9 @@ def ha_request(ha_url: str, token: str, method: str, path: str, body: Any = _UNS
     if body is not _UNSET:
         headers["Content-Type"] = "application/json"
         data = json.dumps(body).encode("utf-8")
-    response = http_request(method, join_api_uri(ha_url, path), headers=headers, body=data, timeout=30)
+    response = http_request(
+        method, join_api_uri(ha_url, path), headers=headers, body=data, timeout=30, verify_tls=True
+    )
     if not response.ok:
         raise MigrationError(f"Home Assistant {method} {path} failed with HTTP {response.status}: {response.text()}")
     return _parse_json(response.text())
@@ -389,7 +400,7 @@ class WebSocketClient:
         port = parsed.port or (443 if parsed.scheme == "wss" else 80)
         try:
             raw = socket.create_connection((parsed.hostname, port), timeout=timeout)
-            self._sock = _INSECURE_TLS.wrap_socket(raw, server_hostname=parsed.hostname) if parsed.scheme == "wss" else raw
+            self._sock = _VERIFIED_TLS.wrap_socket(raw, server_hostname=parsed.hostname) if parsed.scheme == "wss" else raw
         except OSError as exc:
             raise MigrationError(f"Unable to connect to the Home Assistant WebSocket at '{url}': {exc}") from exc
         self._buffer = b""

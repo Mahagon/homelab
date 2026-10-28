@@ -74,7 +74,9 @@ line or written to the checkpoint file. Home Assistant stores the Shelly
 credentials in its config-entry storage after reauthentication.
 
 Set `HOME_ASSISTANT_URL` to the externally reachable Home Assistant base URL,
-or pass it with `--home-assistant-url`. Reauthentication
+or pass it with `--home-assistant-url`. HTTPS certificates are verified for
+Home Assistant (only the Shelly devices' self-signed certificates are
+tolerated), so use the public hostname rather than an IP address. Reauthentication
 flow discovery uses the local WebSocket endpoint
 `ws://192.168.178.10:8123/api/websocket` by default. Override it with
 `--home-assistant-websocket-url` if the Home Assistant address changes.
