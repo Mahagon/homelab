@@ -45,6 +45,17 @@ spec:
       containers:
         - name: grist
           image: gristlabs/grist-oss:1.7.21@sha256:5657dc14b1745ef759bf789e5206ff4591e9b7d61d53777cc2fc710bfc9fbe36
+          # sandbox/run.sh without the gVisor checkpoint: restoring it needs XSAVE,
+          # which the node's Celeron J1900 lacks ("incompatible FeatureSet"), so
+          # every document failed to open. Plain gVisor works; recheck this
+          # against run.sh on Grist upgrades.
+          args:
+            - bash
+            - -c
+            - >-
+              runsc --network none $GVISOR_FLAGS do true &&
+              exec env NODE_PATH=_build:_build/ext:_build/stubs:ext/node_modules
+              node _build/stubs/app/server/server.js
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
