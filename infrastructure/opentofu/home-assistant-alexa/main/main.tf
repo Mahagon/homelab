@@ -8,6 +8,9 @@ locals {
   # jellyfin.<domain> stays LAN-only (ExternalDNS, Traefik); this is the remote twin.
   jellyfin_hostname = "jellyfin-remote.${var.home_assistant_domain}"
   jellyfin_origin   = "http://jellyfin.jellyfin.svc.cluster.local:8096"
+  # Grist for the neighbourhood meter readings; only reachable through Cloudflare Access.
+  zaehlerstaende_hostname = "zaehlerstaende.${var.home_assistant_domain}"
+  zaehlerstaende_origin   = "http://grist.grist.svc.cluster.local:80"
   common_tags = merge({
     ManagedBy   = "OpenTofu"
     Project     = "home-assistant-alexa"
@@ -192,6 +195,23 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "home_assistant" {
         }
       },
       {
+        hostname = local.zaehlerstaende_hostname
+        service  = local.zaehlerstaende_origin
+        origin_request = {
+          connect_timeout  = 10
+          tcp_keep_alive   = 30
+          http_host_header = local.zaehlerstaende_hostname
+          no_tls_verify    = false
+          # cloudflared itself rejects requests without a valid Access JWT for this
+          # application, so Grist can trust the Access email header it forwards.
+          access = {
+            required  = true
+            team_name = var.cloudflare_access_team_name
+            aud_tag   = [cloudflare_zero_trust_access_application.zaehlerstaende.aud]
+          }
+        }
+      },
+      {
         service = "http_status:404"
       }
     ]
@@ -234,16 +254,28 @@ resource "cloudflare_dns_record" "jellyfin" {
   comment = "Jellyfin remote access via the home-assistant-k3s Cloudflare Tunnel; managed by OpenTofu."
 }
 
+resource "cloudflare_dns_record" "zaehlerstaende" {
+  count = var.publish_dns ? 1 : 0
+
+  zone_id = var.cloudflare_zone_id
+  name    = "zaehlerstaende"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.home_assistant.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
+  comment = "Grist meter readings behind Cloudflare Access via the home-assistant-k3s Cloudflare Tunnel; managed by OpenTofu."
+}
+
 check "tunnel_origin_contract" {
   assert {
-    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[*].service == tolist(["http://home-assistant.home-assistant.svc.cluster.local:8123", local.vaultwarden_origin, local.jellyfin_origin, "http_status:404"])
-    error_message = "The tunnel may only target the internal Home Assistant, Vaultwarden, and Jellyfin services."
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[*].service == tolist(["http://home-assistant.home-assistant.svc.cluster.local:8123", local.vaultwarden_origin, local.jellyfin_origin, local.zaehlerstaende_origin, "http_status:404"])
+    error_message = "The tunnel may only target the internal Home Assistant, Vaultwarden, Jellyfin, and Grist services."
   }
 }
 
 check "dns_targets_tunnel" {
   assert {
-    condition     = !var.publish_dns || alltrue([for record in concat(cloudflare_dns_record.home_assistant, cloudflare_dns_record.vaultwarden, cloudflare_dns_record.jellyfin) : record.content == "${cloudflare_zero_trust_tunnel_cloudflared.home_assistant.id}.cfargotunnel.com"])
+    condition     = !var.publish_dns || alltrue([for record in concat(cloudflare_dns_record.home_assistant, cloudflare_dns_record.vaultwarden, cloudflare_dns_record.jellyfin, cloudflare_dns_record.zaehlerstaende) : record.content == "${cloudflare_zero_trust_tunnel_cloudflared.home_assistant.id}.cfargotunnel.com"])
     error_message = "The public DNS records must target the managed tunnel."
   }
 }

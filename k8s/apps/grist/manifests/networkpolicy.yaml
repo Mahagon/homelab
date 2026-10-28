@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: grist
+spec:
+  podSelector: {}
+  # Grist needs no egress at all (formulas run in a network-less sandbox), so a
+  # compromised pod cannot reach the LAN, the cluster, or the internet.
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# cloudflared is the only client: it enforces the Cloudflare Access JWT that
+# backs the trusted Cf-Access-Authenticated-User-Email header.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cloudflared-ingress
+  namespace: grist
+spec:
+  podSelector:
+    matchLabels:
+      app: grist
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflared
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudflared
+      ports:
+        - protocol: TCP
+          port: 8484

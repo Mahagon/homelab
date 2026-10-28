@@ -47,6 +47,18 @@ mock_provider "cloudflare" {
       token = "test-sensitive-tunnel-token"
     }
   }
+
+  mock_resource "cloudflare_zero_trust_access_application" {
+    defaults = {
+      aud = "test-access-aud-tag"
+    }
+  }
+
+  mock_resource "cloudflare_zero_trust_access_policy" {
+    defaults = {
+      id = "66666666-7777-8888-9999-000000000000"
+    }
+  }
 }
 
 variables {
@@ -54,6 +66,9 @@ variables {
   cloudflare_zone_id    = "fedcba9876543210fedcba9876543210"
   home_assistant_domain = "example.invalid"
   budget_email          = "alerts@example.com"
+
+  cloudflare_access_team_name   = "homelab-test"
+  zaehlerstaende_allowed_emails = ["owner@example.com", "neighbour@example.org"]
 
   grafana_prometheus_datasource_uid = "grafanacloud-prom"
 }
@@ -92,7 +107,7 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = length(cloudflare_dns_record.home_assistant) == 0 && length(cloudflare_dns_record.vaultwarden) == 0 && length(cloudflare_dns_record.jellyfin) == 0
+    condition     = length(cloudflare_dns_record.home_assistant) == 0 && length(cloudflare_dns_record.vaultwarden) == 0 && length(cloudflare_dns_record.jellyfin) == 0 && length(cloudflare_dns_record.zaehlerstaende) == 0
     error_message = "DNS must remain unpublished during the initial connector deployment."
   }
 
@@ -107,12 +122,12 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = length(cloudflare_ruleset.home_assistant_custom_waf.rules) == 5 && alltrue([for rule in cloudflare_ruleset.home_assistant_custom_waf.rules : rule.action == "block" && rule.enabled && (strcontains(rule.expression, "http.host eq \"homeassistant.example.invalid\"") || strcontains(rule.expression, "http.host eq \"vault.example.invalid\"") || strcontains(rule.expression, "http.host in {\"homeassistant.example.invalid\" \"vault.example.invalid\" \"jellyfin-remote.example.invalid\"}"))])
+    condition     = length(cloudflare_ruleset.home_assistant_custom_waf.rules) == 5 && alltrue([for rule in cloudflare_ruleset.home_assistant_custom_waf.rules : rule.action == "block" && rule.enabled && (strcontains(rule.expression, "http.host eq \"homeassistant.example.invalid\"") || strcontains(rule.expression, "http.host eq \"vault.example.invalid\"") || strcontains(rule.expression, "http.host in {\"homeassistant.example.invalid\" \"vault.example.invalid\" \"jellyfin-remote.example.invalid\" \"zaehlerstaende.example.invalid\"}"))])
     error_message = "All custom WAF rules must block and remain scoped to the tunnel hostnames."
   }
 
   assert {
-    condition     = cloudflare_ruleset.home_assistant_custom_waf.rules[1].expression == "(http.host in {\"homeassistant.example.invalid\" \"vault.example.invalid\" \"jellyfin-remote.example.invalid\"}) and ((http.request.method in {\"CONNECT\" \"TRACE\" \"TRACK\"}) or (ip.src in $homelab_ip_bans and not (ip.src.asnum in {16509 14618} and http.request.uri.path in {\"/api/alexa/smart_home\" \"/auth/token\"})))"
+    condition     = cloudflare_ruleset.home_assistant_custom_waf.rules[1].expression == "(http.host in {\"homeassistant.example.invalid\" \"vault.example.invalid\" \"jellyfin-remote.example.invalid\" \"zaehlerstaende.example.invalid\"}) and ((http.request.method in {\"CONNECT\" \"TRACE\" \"TRACK\"}) or (ip.src in $homelab_ip_bans and not (ip.src.asnum in {16509 14618} and http.request.uri.path in {\"/api/alexa/smart_home\" \"/auth/token\"})))"
     error_message = "The unsafe-method rule must also block the ban list on every tunnel hostname, except Amazon's Alexa traffic."
   }
 
@@ -132,8 +147,8 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = startswith(cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression, "((http.host in {\"vault.example.invalid\" \"jellyfin-remote.example.invalid\"}) and not (ip.src.country in {\"DE\"})) or ((http.host eq \"vault.example.invalid\") and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\"))) or ((http.host eq \"jellyfin-remote.example.invalid\") and (")
-    error_message = "Vaultwarden and Jellyfin must be limited to allowed countries with no Amazon bypass, and the Vaultwarden admin panel must not be public."
+    condition     = startswith(cloudflare_ruleset.home_assistant_custom_waf.rules[4].expression, "((http.host in {\"vault.example.invalid\" \"jellyfin-remote.example.invalid\" \"zaehlerstaende.example.invalid\"}) and not (ip.src.country in {\"DE\"})) or ((http.host eq \"vault.example.invalid\") and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\"))) or ((http.host eq \"jellyfin-remote.example.invalid\") and (")
+    error_message = "Vaultwarden, Jellyfin, and Grist must be limited to allowed countries with no Amazon bypass, and the Vaultwarden admin panel must not be public."
   }
 
   assert {
@@ -142,8 +157,8 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[*].service == tolist(["http://home-assistant.home-assistant.svc.cluster.local:8123", "http://vaultwarden.vaultwarden.svc.cluster.local:80", "http://jellyfin.jellyfin.svc.cluster.local:8096", "http_status:404"])
-    error_message = "The tunnel must route only Home Assistant, Vaultwarden, and Jellyfin, ending in the 404 catch-all."
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[*].service == tolist(["http://home-assistant.home-assistant.svc.cluster.local:8123", "http://vaultwarden.vaultwarden.svc.cluster.local:80", "http://jellyfin.jellyfin.svc.cluster.local:8096", "http://grist.grist.svc.cluster.local:80", "http_status:404"])
+    error_message = "The tunnel must route only Home Assistant, Vaultwarden, Jellyfin, and Grist, ending in the 404 catch-all."
   }
 
   assert {
@@ -154,6 +169,26 @@ run "secure_stack_without_skill" {
   assert {
     condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[2].hostname == "jellyfin-remote.example.invalid"
     error_message = "The Jellyfin origin must be bound to the jellyfin-remote hostname."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[3].hostname == "zaehlerstaende.example.invalid" && cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[3].origin_request.access.required && cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[3].origin_request.access.team_name == "homelab-test" && cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress[3].origin_request.access.aud_tag == tolist(["test-access-aud-tag"])
+    error_message = "The Grist origin must be bound to the zaehlerstaende hostname, and cloudflared must require that application's Access JWT."
+  }
+
+  assert {
+    condition     = alltrue([for ingress in cloudflare_zero_trust_tunnel_cloudflared_config.home_assistant.config.ingress : ingress.origin_request == null || ingress.origin_request.access == null if ingress.hostname != "zaehlerstaende.example.invalid"])
+    error_message = "Only the Grist route may require Access; the other services' native clients cannot complete an Access login."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_access_application.zaehlerstaende.type == "self_hosted" && cloudflare_zero_trust_access_application.zaehlerstaende.domain == "zaehlerstaende.example.invalid" && length(cloudflare_zero_trust_access_application.zaehlerstaende.policies) == 1 && cloudflare_zero_trust_access_application.zaehlerstaende.policies[0].id == "66666666-7777-8888-9999-000000000000" && cloudflare_zero_trust_access_application.zaehlerstaende.policies[0].precedence == 1
+    error_message = "The Access application must cover the whole zaehlerstaende hostname with only the neighbours policy."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_access_policy.zaehlerstaende.decision == "allow" && length(cloudflare_zero_trust_access_policy.zaehlerstaende.include) == 2 && alltrue([for rule in cloudflare_zero_trust_access_policy.zaehlerstaende.include : rule.email != null && rule.everyone == null && rule.email_domain == null])
+    error_message = "The Access policy must allow only the listed email addresses, never everyone or a whole domain."
   }
 
   assert {
@@ -182,13 +217,18 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = length(cloudflare_ruleset.home_assistant_cache.rules) == 3 && cloudflare_ruleset.home_assistant_cache.rules[1].expression == "(http.host eq \"vault.example.invalid\")" && cloudflare_ruleset.home_assistant_cache.rules[1].action == "set_cache_settings" && !cloudflare_ruleset.home_assistant_cache.rules[1].action_parameters.cache
+    condition     = length(cloudflare_ruleset.home_assistant_cache.rules) == 4 && cloudflare_ruleset.home_assistant_cache.rules[1].expression == "(http.host eq \"vault.example.invalid\")" && cloudflare_ruleset.home_assistant_cache.rules[1].action == "set_cache_settings" && !cloudflare_ruleset.home_assistant_cache.rules[1].action_parameters.cache
     error_message = "Every Vaultwarden response must bypass the Cloudflare cache."
   }
 
   assert {
     condition     = cloudflare_ruleset.home_assistant_cache.rules[2].expression == "(http.host eq \"jellyfin-remote.example.invalid\")" && cloudflare_ruleset.home_assistant_cache.rules[2].action == "set_cache_settings" && !cloudflare_ruleset.home_assistant_cache.rules[2].action_parameters.cache
     error_message = "Every Jellyfin response must bypass the Cloudflare cache."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_cache.rules[3].expression == "(http.host eq \"zaehlerstaende.example.invalid\")" && cloudflare_ruleset.home_assistant_cache.rules[3].action == "set_cache_settings" && !cloudflare_ruleset.home_assistant_cache.rules[3].action_parameters.cache
+    error_message = "Every Grist response must bypass the Cloudflare cache."
   }
 
   assert {
@@ -202,13 +242,18 @@ run "secure_stack_without_skill" {
   }
 
   assert {
-    condition     = length(cloudflare_ruleset.home_assistant_response_headers.rules) == 3 && cloudflare_ruleset.home_assistant_response_headers.rules[1].expression == "(http.host eq \"vault.example.invalid\")" && cloudflare_ruleset.home_assistant_response_headers.rules[1].action_parameters.headers["strict-transport-security"].value == "max-age=2592000" && cloudflare_ruleset.home_assistant_response_headers.rules[1].action_parameters.headers["x-content-type-options"].value == "nosniff"
+    condition     = length(cloudflare_ruleset.home_assistant_response_headers.rules) == 4 && cloudflare_ruleset.home_assistant_response_headers.rules[1].expression == "(http.host eq \"vault.example.invalid\")" && cloudflare_ruleset.home_assistant_response_headers.rules[1].action_parameters.headers["strict-transport-security"].value == "max-age=2592000" && cloudflare_ruleset.home_assistant_response_headers.rules[1].action_parameters.headers["x-content-type-options"].value == "nosniff"
     error_message = "Vaultwarden responses must receive the same conservative HSTS and nosniff headers."
   }
 
   assert {
     condition     = cloudflare_ruleset.home_assistant_response_headers.rules[2].expression == "(http.host eq \"jellyfin-remote.example.invalid\")" && cloudflare_ruleset.home_assistant_response_headers.rules[2].action_parameters.headers["strict-transport-security"].value == "max-age=2592000" && cloudflare_ruleset.home_assistant_response_headers.rules[2].action_parameters.headers["x-content-type-options"].value == "nosniff"
     error_message = "Jellyfin responses must receive the same conservative HSTS and nosniff headers."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.home_assistant_response_headers.rules[3].expression == "(http.host eq \"zaehlerstaende.example.invalid\")" && cloudflare_ruleset.home_assistant_response_headers.rules[3].action_parameters.headers["strict-transport-security"].value == "max-age=2592000" && cloudflare_ruleset.home_assistant_response_headers.rules[3].action_parameters.headers["x-content-type-options"].value == "nosniff"
+    error_message = "Grist responses must receive the same conservative HSTS and nosniff headers."
   }
 
   assert {
@@ -284,6 +329,11 @@ run "skill_and_dns_are_restricted" {
     condition     = cloudflare_dns_record.jellyfin[0].proxied && cloudflare_dns_record.jellyfin[0].type == "CNAME" && cloudflare_dns_record.jellyfin[0].name == "jellyfin-remote"
     error_message = "Jellyfin DNS must be a proxied CNAME."
   }
+
+  assert {
+    condition     = cloudflare_dns_record.zaehlerstaende[0].proxied && cloudflare_dns_record.zaehlerstaende[0].type == "CNAME" && cloudflare_dns_record.zaehlerstaende[0].name == "zaehlerstaende"
+    error_message = "Grist DNS must be a proxied CNAME."
+  }
 }
 
 run "reject_wrong_region" {
@@ -314,6 +364,26 @@ run "reject_malformed_skill_id" {
   }
 
   expect_failures = [var.alexa_skill_id]
+}
+
+run "reject_empty_zaehlerstaende_allowlist" {
+  command = plan
+
+  variables {
+    zaehlerstaende_allowed_emails = []
+  }
+
+  expect_failures = [var.zaehlerstaende_allowed_emails]
+}
+
+run "reject_malformed_access_team_name" {
+  command = plan
+
+  variables {
+    cloudflare_access_team_name = "homelab.cloudflareaccess.com"
+  }
+
+  expect_failures = [var.cloudflare_access_team_name]
 }
 
 run "reject_malformed_cloudflare_id" {

@@ -221,9 +221,12 @@ kubectl run restic-restore -n backup --rm -it --restart=Never \
 | Jellyfin       | `https://jellyfin.<your-domain>` (LAN) |
 | Paperless-ngx  | `https://paperless.<your-domain>`      |
 | Vaultwarden    | `https://vault.<your-domain>`          |
+| Grist          | `https://zaehlerstaende.<your-domain>` (Cloudflare Access only) |
 | PostgreSQL     | Internal only (ClusterIP on port 5432) |
 | Redis          | Internal only (ClusterIP on port 6379) |
 
 Home Assistant and Vaultwarden are also reachable from the internet through the
 Cloudflare Tunnel, and Jellyfin through the separate
 `https://jellyfin-remote.<your-domain>` hostname; see [docs/home-assistant-alexa.md](docs/home-assistant-alexa.md).
+Grist, for the neighbours' yearly meter readings, is reachable only through the
+tunnel behind Cloudflare Access; see [docs/zaehlerstaende.md](docs/zaehlerstaende.md).

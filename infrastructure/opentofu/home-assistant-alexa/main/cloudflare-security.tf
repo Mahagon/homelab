@@ -2,9 +2,10 @@ locals {
   home_assistant_waf_scope = "(http.host eq \"${local.home_assistant_hostname}\")"
   vaultwarden_waf_scope    = "(http.host eq \"${local.vaultwarden_hostname}\")"
   jellyfin_waf_scope       = "(http.host eq \"${local.jellyfin_hostname}\")"
-  tunnel_waf_scope         = "(http.host in {\"${local.home_assistant_hostname}\" \"${local.vaultwarden_hostname}\" \"${local.jellyfin_hostname}\"})"
-  # Vaultwarden and Jellyfin share one geo rule, so they share one allowlist.
-  geo_allowlist_scope = "(http.host in {\"${local.vaultwarden_hostname}\" \"${local.jellyfin_hostname}\"})"
+  zaehlerstaende_waf_scope = "(http.host eq \"${local.zaehlerstaende_hostname}\")"
+  tunnel_waf_scope         = "(http.host in {\"${local.home_assistant_hostname}\" \"${local.vaultwarden_hostname}\" \"${local.jellyfin_hostname}\" \"${local.zaehlerstaende_hostname}\"})"
+  # Vaultwarden, Jellyfin, and Grist share one geo rule, so they share one allowlist.
+  geo_allowlist_scope = "(http.host in {\"${local.vaultwarden_hostname}\" \"${local.jellyfin_hostname}\" \"${local.zaehlerstaende_hostname}\"})"
 
   home_assistant_allowed_countries = ["DE"]
   # Alexa directives come from the eu-west-1 Lambda (IE) and account linking
@@ -93,9 +94,10 @@ resource "cloudflare_ruleset" "cloudflare_managed_waf" {
 
 # This entry-point ruleset adds custom controls that are safe for Home Assistant's
 # browser, companion-app, WebSocket, OAuth, and Alexa traffic, for the
-# Vaultwarden web vault and Bitwarden clients, and for the Jellyfin web and
-# native clients. The Free plan permits five custom rules, so the Vaultwarden
-# and Jellyfin geo blocks and both admin-surface blocks share one rule.
+# Vaultwarden web vault and Bitwarden clients, for the Jellyfin web and native
+# clients, and for Grist behind Cloudflare Access. The Free plan permits five
+# custom rules, so the Vaultwarden, Jellyfin, and Grist geo blocks and both
+# admin-surface blocks share one rule.
 resource "cloudflare_ruleset" "home_assistant_custom_waf" {
   zone_id     = var.cloudflare_zone_id
   name        = "Home Assistant custom WAF controls"
@@ -136,7 +138,7 @@ resource "cloudflare_ruleset" "home_assistant_custom_waf" {
     },
     {
       ref         = "geo_allowlist_and_admin_surfaces"
-      description = "Block Vaultwarden and Jellyfin traffic from outside allowed countries and all public Vaultwarden admin-panel and Jellyfin admin-API requests"
+      description = "Block Vaultwarden, Jellyfin, and Grist traffic from outside allowed countries and all public Vaultwarden admin-panel and Jellyfin admin-API requests"
       expression  = "(${local.geo_allowlist_scope} and not (ip.src.country in {${join(" ", [for c in local.geo_allowed_countries : "\"${c}\""])}})) or (${local.vaultwarden_waf_scope} and (lower(http.request.uri.path) eq \"/admin\" or starts_with(lower(http.request.uri.path), \"/admin/\"))) or (${local.jellyfin_waf_scope} and (${local.jellyfin_admin_paths}))"
       action      = "block"
       enabled     = true
@@ -185,7 +187,7 @@ resource "cloudflare_ruleset" "home_assistant_rate_limit" {
   ]
 }
 
-# Home Assistant, Vaultwarden, and Jellyfin are authenticated and stateful. Explicitly bypassing the edge
+# Home Assistant, Vaultwarden, Jellyfin, and Grist are authenticated and stateful. Explicitly bypassing the edge
 # cache prevents a future origin-header change from making any response cache
 # eligible, including API and authentication responses.
 resource "cloudflare_ruleset" "home_assistant_cache" {
@@ -225,12 +227,22 @@ resource "cloudflare_ruleset" "home_assistant_cache" {
       action_parameters = {
         cache = false
       }
+    },
+    {
+      ref         = "bypass_zaehlerstaende_cache"
+      description = "Bypass Cloudflare cache for every Grist response"
+      expression  = local.zaehlerstaende_waf_scope
+      action      = "set_cache_settings"
+      enabled     = true
+      action_parameters = {
+        cache = false
+      }
     }
   ]
 }
 
 # Start HSTS with a reversible 30-day lifetime and deliberately omit
-# includeSubDomains and preload because this module owns only three zone hostnames.
+# includeSubDomains and preload because this module owns only four zone hostnames.
 resource "cloudflare_ruleset" "home_assistant_response_headers" {
   zone_id     = var.cloudflare_zone_id
   name        = "Home Assistant security response headers"
@@ -281,6 +293,25 @@ resource "cloudflare_ruleset" "home_assistant_response_headers" {
       ref         = "jellyfin_security_headers"
       description = "Set HSTS and disable MIME content sniffing for Jellyfin"
       expression  = local.jellyfin_waf_scope
+      action      = "rewrite"
+      enabled     = true
+      action_parameters = {
+        headers = {
+          "strict-transport-security" = {
+            operation = "set"
+            value     = "max-age=2592000"
+          }
+          "x-content-type-options" = {
+            operation = "set"
+            value     = "nosniff"
+          }
+        }
+      }
+    },
+    {
+      ref         = "zaehlerstaende_security_headers"
+      description = "Set HSTS and disable MIME content sniffing for Grist"
+      expression  = local.zaehlerstaende_waf_scope
       action      = "rewrite"
       enabled     = true
       action_parameters = {
