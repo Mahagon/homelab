@@ -16,6 +16,7 @@
   "platformAutomerge": false,
   "ignoreTests": false,
   "rebaseWhen": "conflicted",
+  "internalChecksFilter": "none",
   "argocd": {
     "managerFilePatterns": [
       "/k8s/apps/.+/application\\.yaml$/"
@@ -40,7 +41,7 @@
       "groupName": "OpenTofu providers"
     },
     {
-      "description": "Automerge tested non-major dependency updates once they are three days old, so a compromised upstream release can be yanked before Argo CD deploys it",
+      "description": "Automerge tested non-major dependency updates",
       "matchUpdateTypes": [
         "minor",
         "patch",
@@ -49,7 +50,21 @@
         "digest",
         "lockFileMaintenance"
       ],
-      "automerge": true,
+      "automerge": true
+    },
+    {
+      "description": "Hold minor releases for three days before automerge so a compromised upstream release can be yanked first; patches and digests (where image security fixes land) merge as soon as CI passes",
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
+      "description": "GitHub Actions run with deploy credentials, so every update waits three days; advisories still bypass this through vulnerabilityAlerts",
+      "matchManagers": [
+        "github-actions"
+      ],
       "minimumReleaseAge": "3 days",
       "minimumReleaseAgeBehaviour": "timestamp-optional"
     }
