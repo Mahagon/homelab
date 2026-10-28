@@ -61,6 +61,13 @@
       "minimumReleaseAgeBehaviour": "timestamp-optional"
     },
     {
+      "description": "Argo CD's Redis override follows the chart's 8.6 line; only take patch releases",
+      "matchPackageNames": [
+        "ecr-public.aws.com/docker/library/redis"
+      ],
+      "allowedVersions": "/^8\\.6\\.\\d+-alpine$/"
+    },
+    {
       "description": "GitHub Actions run with deploy credentials, so every update waits three days; advisories still bypass this through vulnerabilityAlerts",
       "matchManagers": [
         "github-actions"
@@ -107,6 +114,17 @@
       ],
       "matchStrings": [
         "image:\\s+(?<depName>quay\\.io/argoproj/argocd):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/k8s/apps/argocd/application\\.yaml$/"
+      ],
+      "matchStrings": [
+        "repository:\\s+(?<depName>ecr-public\\.aws\\.com/docker/library/redis)\\s+tag:\\s+(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
       ],
       "datasourceTemplate": "docker",
       "versioningTemplate": "docker"
