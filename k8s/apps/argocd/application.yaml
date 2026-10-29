@@ -63,7 +63,7 @@ spec:
               # CVEs. Renovate keeps this on 8.6.x patches; drop the override once
               # the chart's default is newer.
               repository: ecr-public.aws.com/docker/library/redis
-              tag: 8.6.8-alpine@sha256:7d8d9a58ab3ef32025b06c9f9aeb273d0fb82a79f13d63658e7d7e56ee2f032c
+              tag: 8.6.8-alpine@sha256:f4ed7d6732f9a5dcc6b64e2b347860b9f329334bfd4839a672f78cd981a8bba6
           repoServer:
             metrics:
               enabled: true
