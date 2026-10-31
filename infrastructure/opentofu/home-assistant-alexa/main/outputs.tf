@@ -43,12 +43,6 @@ output "jellyfin_hostname" {
   sensitive   = true
 }
 
-output "zaehlerstaende_hostname" {
-  description = "Grist meter-readings hostname published through the tunnel behind Cloudflare Access."
-  value       = local.zaehlerstaende_hostname
-  sensitive   = true
-}
-
 output "alexa_permission_configured" {
   description = "Whether the Lambda invocation permission is restricted to an Alexa Skill ID."
   value       = var.alexa_skill_id != ""

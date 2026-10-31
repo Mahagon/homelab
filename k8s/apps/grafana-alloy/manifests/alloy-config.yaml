@@ -304,19 +304,6 @@ data:
           cluster = "homelab",
         }
       }
-      // Grist prints its admin boot key on every start and logs user emails;
-      // neither the key nor the neighbours' addresses may leave the cluster.
-      stage.match {
-        selector = "{namespace=\"grist\"}"
-        stage.replace {
-          expression = "(?i)(?:boot key:|grist\\.boot\\.key:)\\s*(\\S+)"
-          replace    = "<redacted>"
-        }
-        stage.replace {
-          expression = "([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})"
-          replace    = "<redacted-email>"
-        }
-      }
       forward_to = [loki.write.grafana_cloud.receiver]
     }
 
