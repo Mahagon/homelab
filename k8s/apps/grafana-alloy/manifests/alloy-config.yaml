@@ -95,6 +95,18 @@ data:
         ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
         insecure_skip_verify = false
       }
+      forward_to = [prometheus.relabel.kubelet_allowlist.receiver]
+    }
+
+    // K3s runs the API server, scheduler and controller-manager in the same
+    // process, so this endpoint also serves ~7k apiserver_*/workqueue_* series.
+    // Keep only the kubelet metrics the Kubernetes integration uses.
+    prometheus.relabel "kubelet_allowlist" {
+      rule {
+        source_labels = ["__name__"]
+        regex         = "kubelet_.+|volume_manager_total_volumes|storage_operation_duration_seconds_count|storage_operation_errors_total|kubernetes_build_info|rest_client_requests_total|process_.+"
+        action        = "keep"
+      }
       forward_to = [prometheus.relabel.drop_high_cardinality.receiver]
     }
 
@@ -124,6 +136,17 @@ data:
       tls_config {
         ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
         insecure_skip_verify = false
+      }
+      forward_to = [prometheus.relabel.cadvisor_allowlist.receiver]
+    }
+
+    // Container CPU, memory, filesystem and network metrics used by the
+    // Kubernetes integration dashboards and alerts; the rest is ~5k series.
+    prometheus.relabel "cadvisor_allowlist" {
+      rule {
+        source_labels = ["__name__"]
+        regex         = "container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_cpu_usage_seconds_total|container_fs_reads_bytes_total|container_fs_reads_total|container_fs_writes_bytes_total|container_fs_writes_total|container_memory_cache|container_memory_rss|container_memory_swap|container_memory_working_set_bytes|container_network_receive_bytes_total|container_network_receive_packets_dropped_total|container_network_receive_packets_total|container_network_transmit_bytes_total|container_network_transmit_packets_dropped_total|container_network_transmit_packets_total|machine_memory_bytes|machine_cpu_cores"
+        action        = "keep"
       }
       forward_to = [prometheus.relabel.drop_high_cardinality.receiver]
     }
@@ -157,7 +180,7 @@ data:
     prometheus.scrape "argocd" {
       targets         = discovery.relabel.argocd_metrics.output
       scrape_interval = "30s"
-      forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+      forward_to      = [prometheus.relabel.drop_high_cardinality.receiver]
     }
 
     // --- Scrape pods with prometheus.io annotations ---
@@ -241,6 +264,21 @@ data:
       rule {
         source_labels = ["__name__"]
         regex         = "(.+_bucket|etcd_.+|apiserver_request_duration.+|apiserver_response_sizes.+|grpc_server_.+)"
+        action        = "drop"
+      }
+      // kube-state-metrics: one series per object for every old (scaled-to-0)
+      // ReplicaSet, Secret and ConfigMap. kube_replicaset_owner stays for
+      // the pod -> workload mapping.
+      rule {
+        source_labels = ["__name__"]
+        regex         = "kube_replicaset_(created|metadata_.+|spec_.+|status_.+)|kube_secret_.+|kube_configmap_.+|kube_endpointslice_.+"
+        action        = "drop"
+      }
+      // node-exporter: per-pod veth interfaces (~1.2k series); host NICs,
+      // bond0, cni0 and flannel.1 are kept.
+      rule {
+        source_labels = ["__name__", "device"]
+        regex         = "node_network_.+;veth.+"
         action        = "drop"
       }
       forward_to = [prometheus.remote_write.grafana_cloud.receiver]
