@@ -20,5 +20,5 @@ roleRef:
   name: alloy-extra
 subjects:
   - kind: ServiceAccount
-    name: alloy
+    name: grafana-alloy
     namespace: grafana-alloy
