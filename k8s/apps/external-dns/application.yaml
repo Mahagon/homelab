@@ -22,7 +22,6 @@ spec:
             - homeassistant.${DOMAIN}
             - vault.${DOMAIN}
             - jellyfin-remote.${DOMAIN}
-            - zaehlerstaende.${DOMAIN}
           env:
             - name: CF_API_TOKEN
               valueFrom:

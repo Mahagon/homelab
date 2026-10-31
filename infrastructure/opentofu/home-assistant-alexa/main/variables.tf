@@ -41,28 +41,6 @@ variable "cloudflare_zone_id" {
   }
 }
 
-variable "cloudflare_access_team_name" {
-  description = "Cloudflare Zero Trust team name (the <team> in <team>.cloudflareaccess.com)."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.cloudflare_access_team_name))
-    error_message = "cloudflare_access_team_name must be the bare team name, without .cloudflareaccess.com."
-  }
-}
-
-variable "zaehlerstaende_allowed_emails" {
-  description = "Email addresses allowed through Cloudflare Access to the Grist meter-readings site, including the owner's."
-  type        = list(string)
-  sensitive   = true
-  nullable    = false
-
-  validation {
-    condition     = length(var.zaehlerstaende_allowed_emails) > 0 && alltrue([for email in var.zaehlerstaende_allowed_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email))])
-    error_message = "zaehlerstaende_allowed_emails must contain at least one valid email address."
-  }
-}
-
 variable "alexa_skill_id" {
   description = "Alexa Skill ID. Leave empty during the first deployment."
   type        = string

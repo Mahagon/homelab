@@ -24,11 +24,6 @@ and enforcement would affect the whole Cloudflare account, including Home
 Assistant, Alexa, and Vaultwarden. Remove the Jellyfin route first if
 Cloudflare raises it.
 
-Finally, it publishes Grist at `zaehlerstaende.<your-domain>` for the
-neighbours' yearly meter readings. Unlike the other hostnames, it sits behind
-Cloudflare Access, and cloudflared requires the Access JWT. It has no LAN
-route. See [zaehlerstaende.md](zaehlerstaende.md).
-
 The infrastructure is intentionally split into three trust domains:
 
 - OpenTofu manages AWS, Cloudflare Tunnel configuration, and public DNS.
@@ -43,9 +38,8 @@ allowance. S3 state, CloudWatch Logs, and DNS usage are very small but AWS and
 Cloudflare do not provide a contractual zero-cost guarantee. The AWS budget
 alerts at USD 0.01 of actual monthly cost; it does not stop resources.
 
-Paid Security Hub, AWS Config, GuardDuty, customer-managed KMS keys, and X-Ray
-are not enabled. Cloudflare Access (Zero Trust Free plan, up to 50 users)
-protects only the Grist hostname. See [security-compliance.md](security-compliance.md)
+Paid Security Hub, AWS Config, GuardDuty, customer-managed KMS keys, X-Ray, and
+Cloudflare Access are not enabled. See [security-compliance.md](security-compliance.md)
 for the resulting CIS gaps.
 
 ## 1. Workstation tools
@@ -139,7 +133,6 @@ Add these environment variables:
 | `CLOUDFLARE_ZONE_ID`    | Zone ID for `<your-domain>`                      |
 | `ALEXA_SKILL_ID`        | Empty until the ASK deployment creates the skill |
 | `PUBLISH_DNS`           | `true` after the tunnel connectors are healthy   |
-| `CLOUDFLARE_ACCESS_TEAM_NAME` | Zero Trust team name (`<team>.cloudflareaccess.com`) |
 
 Add these environment secrets. Enter them interactively so their values do not
 appear in shell history:
@@ -149,7 +142,6 @@ appear in shell history:
 | `HOME_ASSISTANT_DOMAIN` | Root domain only, without `homeassistant.`, a scheme, or a path |
 | `CLOUDFLARE_API_TOKEN`  | Dedicated token used only by this OpenTofu stack                |
 | `AWS_BUDGET_EMAIL`      | Address for budget notifications                                |
-| `ZAEHLERSTAENDE_ALLOWED_EMAILS` | JSON array of addresses allowed into Grist through Cloudflare Access |
 
 Create a dedicated Cloudflare token; do not reuse the cert-manager or
 ExternalDNS token. Restrict
@@ -166,7 +158,6 @@ it to this account and zone with only:
 - Account Rulesets: Read and Write.
 - Account Filter Lists: Read and Write.
 - Notifications: Read and Write (tunnel health, HTTP DDoS, and Universal SSL email alerts).
-- Access: Apps and Policies: Read and Write (the Grist Access application and policy).
 
 The GitHub role uses OIDC and accepts only the exact subject
 `repo:Mahagon/homelab:environment:aws-production`. It cannot be assumed by a
@@ -293,16 +284,14 @@ kubectl get pods --namespace cloudflared
 Both replicas must be Ready. In Cloudflare, the `home-assistant-k3s` tunnel must
 show Healthy before changing DNS.
 
-The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, HTTPS to
-Cloudflare's published proxy ranges (for the Access signing keys at
-`<team>.cloudflareaccess.com`, used to verify Grist's Access JWT), Home
-Assistant TCP 8123, Vaultwarden TCP 8080, Jellyfin TCP 8096, and Grist TCP 8484. If the Home Assistant node address changes, update the `/32` rule in
+The NetworkPolicies allow only DNS, Cloudflare TCP/UDP 7844, Home Assistant
+TCP 8123, Vaultwarden TCP 8080, and Jellyfin TCP 8096. If the Home Assistant node address changes, update the `/32` rule in
 `k8s/apps/cloudflared/manifests/networkpolicy.yaml` before moving the node.
 
 The UniFi gateway must not have a WAN port-forward or DMZ rule for Home
 Assistant. The connector is outbound-only; no inbound firewall exception is
 required. If UniFi egress rules are restricted, allow the K3s node to reach
-Cloudflare on TCP/UDP 7844 and HTTPS 443. Cloudflare edge IPs are intentionally not pinned
+Cloudflare on TCP/UDP 7844. Cloudflare edge IPs are intentionally not pinned
 because they change over time.
 
 ## 7. Move the existing DNS record under OpenTofu
@@ -376,7 +365,7 @@ rate-limit, cache-settings, and response-header phases. It configures:
   `/api/alexa/smart_home` and `/auth/token`, because anyone can rent an AWS
   instance in any country);
 - one shared rule (the Free plan permits only five custom rules) that blocks
-  every country except Germany for Vaultwarden, Jellyfin, and Grist, with no Amazon
+  every country except Germany for Vaultwarden and Jellyfin, with no Amazon
   bypass, and blocks Vaultwarden's `/admin` so the admin panel is reachable
   only on the LAN;
 - in the same rule, Jellyfin's admin API on `jellyfin-remote`. The dashboard
@@ -625,7 +614,7 @@ shows the old name, delete the device in the Alexa app and discover again.
 - Inspect Lambda logs without dumping events:
   `aws logs tail /aws/lambda/home-assistant-alexa --region eu-west-1`.
 - To roll back to LAN-only access, disable the Alexa development skill and set
-  `publish_dns=false`. This also unpublishes Vaultwarden,
-  `jellyfin-remote`, and `zaehlerstaende`, which share the switch. Do not restore an inbound port forward.
+  `publish_dns=false`. This also unpublishes Vaultwarden and
+  `jellyfin-remote`, which share the switch. Do not restore an inbound port forward.
 - Versioned S3 state permits recovery of a prior state object. Restore only
   after copying the current version and reviewing an OpenTofu plan.
