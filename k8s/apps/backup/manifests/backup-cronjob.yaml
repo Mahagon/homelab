@@ -26,6 +26,9 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      # Remove finished Jobs (and their pods) after a day so a stale failed Job
+      # doesn't keep KubeJobFailed firing long after later runs succeeded.
+      ttlSecondsAfterFinished: 86400
       template:
         spec:
           restartPolicy: Never
@@ -202,6 +205,9 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      # Remove finished Jobs (and their pods) after a day so a stale failed Job
+      # doesn't keep KubeJobFailed firing long after later runs succeeded.
+      ttlSecondsAfterFinished: 86400
       template:
         spec:
           restartPolicy: Never
