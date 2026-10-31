@@ -28,8 +28,10 @@ spec:
             extraEnv:
               - name: GOMEMLIMIT
                 value: "200MiB"
+          # Reloads Alloy when the alloy-config ConfigMap changes; without it, synced
+          # config edits stay unused until the pod restarts.
           configReloader:
-            enabled: false
+            enabled: true
           controller:
             type: daemonset
             podAnnotations:
