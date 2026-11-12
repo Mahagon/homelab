@@ -315,7 +315,7 @@ data:
           - type: grid
             cards:
               - type: heading
-                heading: Energie
+                heading: Strom
                 icon: mdi:lightning-bolt
                 tap_action:
                   action: navigate
@@ -333,20 +333,6 @@ data:
                     name: Verbraucht
                     icon: mdi:home-lightning-bolt
                     color: blue
-                    show_state: true
-                    show_icon: true
-                  - type: entity
-                    entity: sensor.zahlerecke_gas_heute
-                    name: Gas
-                    icon: mdi:fire
-                    color: deep-orange
-                    show_state: true
-                    show_icon: true
-                  - type: entity
-                    entity: sensor.zahlerecke_wasser_heute
-                    name: Wasser
-                    icon: mdi:water
-                    color: light-blue
                     show_state: true
                     show_icon: true
               - type: tile
@@ -404,22 +390,52 @@ data:
                 name: Einspeisung
                 icon: mdi:transmission-tower-export
                 color: teal
+          # Gas und Wasser kommen von der Zählerecke (ESPHome). Die
+          # Tageswerte liefert das zaehlerecke-Paket in home-assistant.yaml.
+          - type: grid
+            cards:
+              - type: heading
+                heading: Gas
+                icon: mdi:fire
+                badges:
+                  - type: entity
+                    entity: sensor.zahlerecke_gas_heute
+                    icon: mdi:calendar-today
+                    color: deep-orange
+                    show_state: true
+                    show_icon: true
               - type: tile
                 entity: sensor.zahlerecke_gas_durchfluss
-                name: Gas
+                name: Durchfluss
                 icon: mdi:fire
                 color: deep-orange
                 features:
                   - type: trend-graph
                     hours_to_show: 24
+                grid_options:
+                  columns: full
+          - type: grid
+            cards:
+              - type: heading
+                heading: Wasser
+                icon: mdi:water
+                badges:
+                  - type: entity
+                    entity: sensor.zahlerecke_wasser_heute
+                    icon: mdi:calendar-today
+                    color: light-blue
+                    show_state: true
+                    show_icon: true
               - type: tile
                 entity: sensor.zahlerecke_wasser_durchfluss
-                name: Wasser
+                name: Durchfluss
                 icon: mdi:water
                 color: light-blue
                 features:
                   - type: trend-graph
                     hours_to_show: 24
+                grid_options:
+                  columns: full
           - type: grid
             cards:
               - type: heading
