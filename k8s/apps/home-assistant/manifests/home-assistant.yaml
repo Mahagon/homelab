@@ -254,6 +254,45 @@ data:
             display_categories: ACTIVITY_TRIGGER
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-zaehlerecke-config
+  namespace: home-assistant
+data:
+  zaehlerecke.yaml: |
+    # Tagesverbrauch der Zählerecke (ESPHome: Gas- und Hauptwasserzähler) für
+    # das Zuhause-Dashboard. utility_meter setzt um Mitternacht auf 0 zurück.
+    utility_meter:
+      zahlerecke_gas_tag:
+        unique_id: zahlerecke_gas_tag
+        source: sensor.zahlerecke_gas_zahlerstand
+        cycle: daily
+      zahlerecke_wasser_tag:
+        unique_id: zahlerecke_wasser_tag
+        source: sensor.zahlerecke_wasser_zahlerstand
+        cycle: daily
+
+    # Die Zählerstände kommen als float (z. B. 2.89400005340576), die
+    # Differenz hätte entsprechend viele Nachkommastellen. Gerundet und Wasser
+    # in Litern, weil ein Tag meist nur wenige hundert Liter sind.
+    template:
+      - sensor:
+          - name: Zählerecke Gas heute
+            unique_id: zahlerecke_gas_heute
+            unit_of_measurement: m³
+            device_class: gas
+            icon: mdi:fire
+            availability: "{{ has_value('sensor.zahlerecke_gas_tag') }}"
+            state: "{{ states('sensor.zahlerecke_gas_tag') | float | round(2) }}"
+          - name: Zählerecke Wasser heute
+            unique_id: zahlerecke_wasser_heute
+            unit_of_measurement: L
+            device_class: water
+            icon: mdi:water
+            availability: "{{ has_value('sensor.zahlerecke_wasser_tag') }}"
+            state: "{{ (states('sensor.zahlerecke_wasser_tag') | float * 1000) | round(0) | int }}"
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: home-assistant-config
@@ -390,6 +429,10 @@ spec:
               mountPath: /config/integrations/frontend.yaml
               subPath: frontend.yaml
               readOnly: true
+            - name: zaehlerecke-config
+              mountPath: /config/integrations/zaehlerecke.yaml
+              subPath: zaehlerecke.yaml
+              readOnly: true
             - name: dashboards
               mountPath: /config/dashboards
               readOnly: true
@@ -419,6 +462,9 @@ spec:
         - name: frontend-config
           configMap:
             name: home-assistant-frontend-config
+        - name: zaehlerecke-config
+          configMap:
+            name: home-assistant-zaehlerecke-config
         - name: dashboards
           configMap:
             name: home-assistant-dashboards

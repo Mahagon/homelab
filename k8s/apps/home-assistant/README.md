@@ -20,6 +20,11 @@ entities exist in the entity registry. Area cards only offer light and shutter
 controls, because an area-wide switch control would also cut power to the
 fridge and the servers.
 
+The `zaehlerecke.yaml` package (ConfigMap `home-assistant-zaehlerecke-config`)
+derives today's gas (m³) and water (L) consumption from the Zählerecke ESPHome
+meter readings with `utility_meter` and rounding template sensors. The start
+view shows them as badges next to the PV figures.
+
 ## Shelly VLAN 20 migration
 
 [`scripts/migrate_shelly_wifi.py`](scripts/migrate_shelly_wifi.py) discovers
