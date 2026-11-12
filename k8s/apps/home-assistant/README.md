@@ -23,7 +23,8 @@ fridge and the servers.
 The `zaehlerecke.yaml` package (ConfigMap `home-assistant-zaehlerecke-config`)
 derives today's gas (m³) and water (L) consumption from the Zählerecke ESPHome
 meter readings with `utility_meter` and rounding template sensors. The start
-view shows them as badges next to the PV figures.
+view shows gas and water in their own sections next to Strom: today's use as a
+heading badge and the flow with a 24 h trend.
 
 ## Shelly VLAN 20 migration
 
