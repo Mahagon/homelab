@@ -390,6 +390,22 @@ data:
                 name: Einspeisung
                 icon: mdi:transmission-tower-export
                 color: teal
+              - type: tile
+                entity: sensor.zahlerecke_gas_durchfluss
+                name: Gas
+                icon: mdi:fire
+                color: deep-orange
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+              - type: tile
+                entity: sensor.zahlerecke_wasser_durchfluss
+                name: Wasser
+                icon: mdi:water
+                color: light-blue
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
           - type: grid
             cards:
               - type: heading
