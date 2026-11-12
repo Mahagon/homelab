@@ -335,6 +335,20 @@ data:
                     color: blue
                     show_state: true
                     show_icon: true
+                  - type: entity
+                    entity: sensor.zahlerecke_gas_heute
+                    name: Gas
+                    icon: mdi:fire
+                    color: deep-orange
+                    show_state: true
+                    show_icon: true
+                  - type: entity
+                    entity: sensor.zahlerecke_wasser_heute
+                    name: Wasser
+                    icon: mdi:water
+                    color: light-blue
+                    show_state: true
+                    show_icon: true
               - type: tile
                 entity: sensor.total_dc_power
                 name: Photovoltaik
