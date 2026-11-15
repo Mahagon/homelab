@@ -83,7 +83,7 @@ data:
         cover.rolladen_8:
           friendly_name: Büro Privat Rollladen
           device_class: shutter
-        cover.rolladen_9:
+        cover.shutter_bathroom:
           friendly_name: Badezimmer Rollladen
           device_class: shutter
         cover.shutters:
@@ -193,7 +193,7 @@ data:
             - cover.rolladen_6
             - cover.rolladen_7
             - cover.rolladen_8
-            - cover.rolladen_9
+            - cover.shutter_bathroom
             - cover.shutters
             - script.shutter_tv_state
         entity_config:
@@ -242,7 +242,7 @@ data:
           cover.rolladen_8:
             name: Büro Privat Rollladen
             display_categories: INTERIOR_BLIND
-          cover.rolladen_9:
+          cover.shutter_bathroom:
             name: Badezimmer Rollladen
             display_categories: INTERIOR_BLIND
           cover.shutters:
