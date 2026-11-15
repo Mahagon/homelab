@@ -67,7 +67,7 @@ data:
               {%- set wetter = {'clear-night': 'Klare Nacht', 'cloudy': 'Bewölkt', 'exceptional': 'Unwetter', 'fog': 'Nebel', 'hail': 'Hagel', 'lightning': 'Gewitter', 'lightning-rainy': 'Gewitter mit Regen', 'partlycloudy': 'Teilweise bewölkt', 'pouring': 'Starkregen', 'rainy': 'Regen', 'snowy': 'Schnee', 'snowy-rainy': 'Schneeregen', 'sunny': 'Sonnig', 'windy': 'Windig', 'windy-variant': 'Windig und bewölkt'} -%}
               {%- set zustand = states('weather.messingen_wetter') -%}
               {%- set lichter = ['light.licht', 'light.licht_2', 'light.licht_3', 'light.licht_4', 'switch.treppenbeleuchtung'] | select('is_state', 'on') | list | count -%}
-              {%- set rollos = ['cover.rolladen', 'cover.rolladen_2', 'cover.rolladen_3', 'cover.rolladen_4', 'cover.rolladen_5', 'cover.rolladen_6', 'cover.rolladen_7', 'cover.rolladen_8', 'cover.rolladen_9'] | select('is_state', 'open') | list | count -%}
+              {%- set rollos = ['cover.rolladen', 'cover.rolladen_2', 'cover.rolladen_3', 'cover.rolladen_4', 'cover.rolladen_5', 'cover.rolladen_6', 'cover.rolladen_7', 'cover.rolladen_8', 'cover.shutter_bathroom'] | select('is_state', 'open') | list | count -%}
               {%- set muell = state_attr('calendar.mullabfuhr', 'message') -%}
               {%- set muell_start = state_attr('calendar.mullabfuhr', 'start_time') -%}
               # {{ gruss }}, Daniel
@@ -308,7 +308,7 @@ data:
                 features:
                   - type: cover-open-close
               - type: tile
-                entity: cover.rolladen_9
+                entity: cover.shutter_bathroom
                 name: Badezimmer
                 features:
                   - type: cover-open-close
