@@ -13,6 +13,9 @@ spec:
         minAllowed:
           memory: 786Mi
         maxAllowed:
+          # Uncapped, OCR bursts push the CPU request past what the single node
+          # can schedule. No CPU limit is set, so paperless can still burst.
+          cpu: 500m
           memory: 2Gi
   updatePolicy:
     updateMode: InPlaceOrRecreate
