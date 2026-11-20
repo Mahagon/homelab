@@ -102,6 +102,14 @@ spec:
                   key: SECRET_KEY
             - name: PAPERLESS_URL
               value: "https://paperless.${DOMAIN}"
+            # Since 3.5, setting PAPERLESS_URL restricts ALLOWED_HOSTS to its hostname
+            # plus localhost. Kubelet probes and Prometheus scrapes hit the pod IP.
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: PAPERLESS_ALLOWED_HOSTS
+              value: "$(POD_IP)"
             - name: PAPERLESS_ENABLE_HTTP_REMOTE_USER
               value: "false"
             - name: PAPERLESS_OCR_LANGUAGE
