@@ -65,6 +65,11 @@ storage:
           mode=active-backup
           miimon=100
 
+          # Pin the bond MAC to enp1s0 so the DHCP reservation (192.168.178.10)
+          # survives reboots; otherwise it follows whichever NIC enslaves first.
+          [ethernet]
+          cloned-mac-address=40:8D:5C:52:D0:12
+
           [ipv4]
           method=auto
 
