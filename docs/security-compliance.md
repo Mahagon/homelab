@@ -125,7 +125,7 @@ CI produces reproducible evidence through:
 - Kubeconform schema validation of raw and rendered Helm resources.
 - Lambda authorization, error, timeout, and log-redaction unit tests.
 - Renovate-only compatibility checks that render changed Helm charts, validate
-  changed manifests against Kubernetes 1.36 schemas, and verify updated image
+  changed manifests against Kubernetes 1.37 schemas, and verify updated image
   digests and `linux/amd64` availability.
 
 On pull requests, only image references introduced or changed relative to the

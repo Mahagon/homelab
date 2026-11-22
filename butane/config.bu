@@ -221,8 +221,22 @@ storage:
             exit 0
           fi
 
+          if ! rpm -q k3s-selinux &>/dev/null; then
+            echo "k3s-update: k3s-selinux is not layered, refusing to upgrade"
+            exit 1
+          fi
+
           echo "k3s-update: upgrading K3s ${CURRENT} -> ${LATEST}"
-          curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${LATEST}" sh -
+          # k3s-selinux is already layered and updated with the OS by rpm-ostree.
+          # Letting the installer re-layer it makes it skip restarting k3s on
+          # CoreOS (it waits for a reboot), which leaves the control plane down.
+          curl -sfL https://get.k3s.io | \
+            INSTALL_K3S_VERSION="${LATEST}" INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
+
+          if ! systemctl is-active --quiet k3s; then
+            echo "k3s-update: k3s is not active after upgrade"
+            exit 1
+          fi
           echo "k3s-update: upgrade complete"
 
     # Automatic system updates configuration
