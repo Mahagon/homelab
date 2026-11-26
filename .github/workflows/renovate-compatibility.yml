@@ -15,7 +15,7 @@ env:
   # renovate: datasource=github-releases depName=helm/helm
   HELM_VERSION: "v4.3.2"
   # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate
-  RENOVATE_IMAGE: "ghcr.io/renovatebot/renovate:44.257.9@sha256:d6b65ff3562dd499240b23d34ef806ec7e5fd2675e4236a027dfb36774f2aa75"
+  RENOVATE_IMAGE: "ghcr.io/renovatebot/renovate:44.263.5@sha256:9806d1b444f2b0b57d7c3b882d453b99c7494db07689c2e1abed8e6ae502b271"
   # renovate: datasource=pypi depName=PyYAML
   PYYAML_VERSION: "6.0.4"
 
